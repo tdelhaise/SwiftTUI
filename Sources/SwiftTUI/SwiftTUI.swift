@@ -401,7 +401,7 @@ open class BaseView: View {
         // Default drawing: fill the view's frame with empty cells
         for y in frame.origin.y..<(frame.origin.y + frame.size.height) {
             for x in frame.origin.x..<(frame.origin.x + frame.size.width) {
-                Terminal.writeToBuffer(x: x, y: y, char: " ", foreground: defaultColors.foreground, background: defaultColors.background)
+                Application.shared.terminal.writeToBuffer(x: x, y: y, char: " ", foreground: defaultColors.foreground, background: defaultColors.background)
             }
         }
 
@@ -473,8 +473,16 @@ public class Application {
     private var isRunning: Bool = false
     private var eventQueue: [Event] = [] // Simple event queue
     public static var currentColorTheme: ColorTheme = .default
+    
+    public let terminal: TerminalProtocol // Dependency injection for Terminal
 
-    public init() {}
+    // Static shared instance for easy access
+    public static var shared: Application!
+
+    public init(terminal: TerminalProtocol = Terminal()) {
+        self.terminal = terminal
+        Application.shared = self // Set the shared instance
+    }
 
     /// Sets the root view of the application.
     public func setRootView(_ view: View) {
@@ -482,8 +490,8 @@ public class Application {
 
         // If the root view is a Desktop, create and set a StatusLine
         if let desktop = view as? Desktop {
-            let terminalWidth = Terminal.currentBuffer.width
-            let terminalHeight = Terminal.currentBuffer.height
+            let terminalWidth = terminal.windowSize.width
+            let terminalHeight = terminal.windowSize.height
             let statusLineFrame = Rect(x: 0, y: terminalHeight - 1, width: terminalWidth, height: 1)
             let statusLine = StatusLine(frame: statusLineFrame, message: "Welcome to SwiftTUI!")
             desktop.set(statusLine: statusLine)
@@ -498,12 +506,12 @@ public class Application {
         }
 
         do {
-            try Terminal.enableRawMode()
-            Terminal.hideCursor()
+            try terminal.enableRawMode()
+            terminal.hideCursor()
             defer { // Ensure raw mode is disabled and cursor is shown on exit
-                try? Terminal.disableRawMode()
-                Terminal.showCursor()
-                Terminal.clearScreen() // Clear screen on exit
+                try? terminal.disableRawMode()
+                terminal.showCursor()
+                terminal.clearScreen() // Clear screen on exit
             }
 
             isRunning = true
@@ -513,9 +521,7 @@ public class Application {
 
             while isRunning {
                 // 1. Process Events
-                if let char = Terminal.readCharacter() {
-                    let byte = char.asciiValue ?? 0
-
+                if let byte = terminal.readCharacter() {
                     if byte == 0x1B { // ESC character
                         escapeSequenceBuffer.append(byte)
                     } else if !escapeSequenceBuffer.isEmpty {
@@ -529,11 +535,9 @@ public class Application {
                             print("  Unrecognized escape sequence: \(escapeSequenceBuffer)")
                             escapeSequenceBuffer.removeAll()
                         }
-                    } else if char == "q" {
-                        isRunning = false
-                        break
                     } else {
                         // Regular character input
+                        let char = Character(UnicodeScalar(byte))
                         let keyEvent = KeyEvent(character: char, keyCode: Int(byte), controlKeyState: [])
                         post(event: .key(keyEvent))
                     }
@@ -544,8 +548,8 @@ public class Application {
                 }
 
                 // 2. Draw
-                rootView.draw(in: Rect(x: 0, y: 0, width: Terminal.currentBuffer.width, height: Terminal.currentBuffer.height)) // Draw the entire root view
-                Terminal.renderBuffer() // Render the buffer to the actual terminal
+                rootView.draw(in: Rect(x: 0, y: 0, width: terminal.windowSize.width, height: terminal.windowSize.height)) // Draw the entire root view
+                terminal.renderBuffer() // Render the buffer to the actual terminal
 
                 // Small delay to prevent busy-waiting in a real loop
                 // With VTIME=1, readCharacter already provides a small delay/timeout.

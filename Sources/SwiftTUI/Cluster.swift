@@ -48,21 +48,21 @@ open class Cluster: BaseView {
         let bgColor = clusterColors.background
 
         // Draw corners
-        Terminal.writeToBuffer(x: x, y: y, char: "┌", foreground: fgColor, background: bgColor)
-        Terminal.writeToBuffer(x: x + width - 1, y: y, char: "┐", foreground: fgColor, background: bgColor)
-        Terminal.writeToBuffer(x: x, y: y + height - 1, char: "└", foreground: fgColor, background: bgColor)
-        Terminal.writeToBuffer(x: x + width - 1, y: y + height - 1, char: "┘", foreground: fgColor, background: bgColor)
+        Application.shared.terminal.writeToBuffer(x: x, y: y, char: "┌", foreground: fgColor, background: bgColor)
+        Application.shared.terminal.writeToBuffer(x: x + width - 1, y: y, char: "┐", foreground: fgColor, background: bgColor)
+        Application.shared.terminal.writeToBuffer(x: x, y: y + height - 1, char: "└", foreground: fgColor, background: bgColor)
+        Application.shared.terminal.writeToBuffer(x: x + width - 1, y: y + height - 1, char: "┘", foreground: fgColor, background: bgColor)
 
         // Draw horizontal borders
         for i in 1..<(width - 1) {
-            Terminal.writeToBuffer(x: x + i, y: y, char: "─", foreground: fgColor, background: bgColor) // Top
-            Terminal.writeToBuffer(x: x + i, y: y + height - 1, char: "─", foreground: fgColor, background: bgColor) // Bottom
+            Application.shared.terminal.writeToBuffer(x: x + i, y: y, char: "─", foreground: fgColor, background: bgColor) // Top
+            Application.shared.terminal.writeToBuffer(x: x + i, y: y + height - 1, char: "─", foreground: fgColor, background: bgColor) // Bottom
         }
 
         // Draw vertical borders
         for i in 1..<(height - 1) {
-            Terminal.writeToBuffer(x: x, y: y + i, char: "│", foreground: fgColor, background: bgColor) // Left
-            Terminal.writeToBuffer(x: x + width - 1, y: y + i, char: "│", foreground: fgColor, background: bgColor) // Right
+            Application.shared.terminal.writeToBuffer(x: x, y: y + i, char: "│", foreground: fgColor, background: bgColor) // Left
+            Application.shared.terminal.writeToBuffer(x: x + width - 1, y: y + i, char: "│", foreground: fgColor, background: bgColor) // Right
         }
 
         if let title = title {
@@ -70,7 +70,7 @@ open class Cluster: BaseView {
             let titleStartX = x + 2 // Offset from left border
             for (index, char) in titleToDisplay.enumerated() {
                 if titleStartX + index < x + width - 1 { // Ensure title fits within border
-                    Terminal.writeToBuffer(x: titleStartX + index, y: y, char: char, foreground: fgColor, background: bgColor)
+                    Application.shared.terminal.writeToBuffer(x: titleStartX + index, y: y, char: char, foreground: fgColor, background: bgColor)
                 }
             }
         }

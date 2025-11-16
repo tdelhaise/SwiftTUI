@@ -35,12 +35,12 @@ open class CheckBox: BaseView {
 
         for (index, char) in displayString.enumerated() {
             if displayX + index < frame.origin.x + frame.size.width {
-                Terminal.writeToBuffer(x: displayX + index, y: displayY, char: char, foreground: fgColor, background: bgColor)
+                Application.shared.terminal.writeToBuffer(x: displayX + index, y: displayY, char: char, foreground: fgColor, background: bgColor)
             }
         }
         // Fill remaining space with background color
         for charIndex in displayString.count..<frame.size.width {
-            Terminal.writeToBuffer(x: displayX + charIndex, y: displayY, char: " ", foreground: fgColor, background: bgColor)
+            Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY, char: " ", foreground: fgColor, background: bgColor)
         }
     }
 

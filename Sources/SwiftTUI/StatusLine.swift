@@ -30,11 +30,11 @@ open class StatusLine: BaseView {
         // Draw the message
         let messageToDisplay = String(message.prefix(frame.size.width))
         for (index, char) in messageToDisplay.enumerated() {
-            Terminal.writeToBuffer(x: displayX + index, y: displayY, char: char, foreground: fgColor, background: bgColor)
+            Application.shared.terminal.writeToBuffer(x: displayX + index, y: displayY, char: char, foreground: fgColor, background: bgColor)
         }
         // Fill remaining space with background color
         for charIndex in messageToDisplay.count..<frame.size.width {
-            Terminal.writeToBuffer(x: displayX + charIndex, y: displayY, char: " ", foreground: fgColor, background: bgColor)
+            Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY, char: " ", foreground: fgColor, background: bgColor)
         }
     }
 }

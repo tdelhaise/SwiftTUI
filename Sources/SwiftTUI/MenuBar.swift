@@ -35,7 +35,7 @@ open class MenuBar: BaseView {
             let bgColor = colors.background
 
             for (charIndex, char) in itemText.enumerated() {
-                Terminal.writeToBuffer(x: currentX + charIndex, y: displayY, char: char, foreground: fgColor, background: bgColor)
+                Application.shared.terminal.writeToBuffer(x: currentX + charIndex, y: displayY, char: char, foreground: fgColor, background: bgColor)
             }
             currentX += itemWidth
         }

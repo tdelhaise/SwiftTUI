@@ -6,28 +6,56 @@ import Glibc
 import Darwin.C
 #endif
 
+// MARK: - TerminalProtocol (for dependency injection)
+
+/// A protocol that defines the interface for terminal interaction.
+/// This allows for easy mocking and testing.
+@MainActor public protocol TerminalProtocol: AnyObject {
+    var cursorPosition: Point { get set }
+    var isCursorHidden: Bool { get set }
+    var windowSize: Size { get }
+
+    func enableRawMode() throws
+    func disableRawMode() throws
+    func enableMouseTracking()
+    func disableMouseTracking()
+    func readCharacter() -> UInt8?
+    func write(_ string: String)
+    func clearScreen()
+    func moveCursor(to point: Point)
+    func hideCursor()
+    func showCursor()
+    func getWindowSize() -> Size
+    func writeToBuffer(x: Int, y: Int, char: Character, foreground: ANSIColor, background: ANSIColor)
+    func renderBuffer()
+}
+
 /// A utility class for managing terminal settings and raw input/output.
 @MainActor
-public class Terminal {
+public class Terminal: TerminalProtocol {
 
     internal static var originalTerminalAttributes: termios?
-    internal static var currentBuffer: ScreenBuffer = ScreenBuffer(width: 80, height: 24) // Default size
-    internal static var previousBuffer: ScreenBuffer = ScreenBuffer(width: 80, height: 24) // Default size
+    
+    internal var currentBuffer: ScreenBuffer
+    internal var previousBuffer: ScreenBuffer
 
-    // Static initializer to set up buffers with actual terminal size
-    // This will be called once when the type is first accessed.
-    private static let setup: Void = {
-        let defaultSize = (width: 80, height: 24)
-        let size = getWindowSize() ?? defaultSize
-        currentBuffer = ScreenBuffer(width: size.width, height: size.height)
-        previousBuffer = ScreenBuffer(width: size.width, height: size.height)
-    }()
+    public var cursorPosition: Point = .zero
+    public var isCursorHidden: Bool = false
+    public var windowSize: Size {
+        return self.getWindowSize()
+    }
+
+    public init() {
+        let defaultSize = Size(width: 80, height: 24)
+        let sizeTuple = Terminal.getStaticWindowSize()
+        let size = sizeTuple.map { Size(width: $0.width, height: $0.height) } ?? defaultSize
+        self.currentBuffer = ScreenBuffer(width: size.width, height: size.height)
+        self.previousBuffer = ScreenBuffer(width: size.width, height: size.height)
+    }
 
     /// Switches the terminal to raw mode.
     /// In raw mode, input is unbuffered and special characters (like Ctrl+C) are not processed by the terminal driver.
-    public static func enableRawMode() throws {
-        _ = setup // Ensure setup is run
-
+    public func enableRawMode() throws {
         var term = termios()
 
         // Get current terminal attributes
@@ -48,14 +76,11 @@ public class Terminal {
             throw TerminalError.failedToSetTerminalAttributes(errno: errno)
         }
 
-        // Enable mouse tracking (SGR mode)
-        write("\u{001B}[?1000h") // Enable X10 mouse tracking
-        write("\u{001B}[?1002h") // Enable button-event tracking (for drag)
-        write("\u{001B}[?1006h") // Enable SGR mouse tracking (more detailed, easier to parse)
+        enableMouseTracking()
     }
 
     /// Restores the terminal to its original (cooked) mode.
-    public static func disableRawMode() throws {
+    public func disableRawMode() throws {
         guard var originalTerm = Terminal.originalTerminalAttributes else {
             // If original attributes were not saved, something went wrong or raw mode was never enabled.
             return
@@ -66,15 +91,24 @@ public class Terminal {
         }
         Terminal.originalTerminalAttributes = nil
 
-        // Disable mouse tracking
-        write("\u{001B}[?1000l") // Disable X10 mouse tracking
-        write("\u{001B}[?1002l") // Disable button-event tracking
-        write("\u{001B}[?1006l") // Disable SGR mouse tracking
+        disableMouseTracking()
+    }
+
+    public func enableMouseTracking() {
+        self.write("\u{001B}[?1000h") // Enable X10 mouse tracking
+        self.write("\u{0001B}[?1002h") // Enable button-event tracking (for drag)
+        self.write("\u{001B}[?1006h") // Enable SGR mouse tracking (more detailed, easier to parse)
+    }
+
+    public func disableMouseTracking() {
+        self.write("\u{001B}[?1000l") // Disable X10 mouse tracking
+        self.write("\u{001B}[?1002l") // Disable button-event tracking
+        self.write("\u{001B}[?1006l") // Disable SGR mouse tracking
     }
 
     /// Reads a single character from standard input.
     /// This function is blocking if VMIN > 0 and VTIME = 0, or non-blocking with timeout if VMIN = 0 and VTIME > 0.
-    public static func readCharacter() -> Character? {
+    public func readCharacter() -> UInt8? {
         var byte: UInt8 = 0
         #if os(Linux)
         let bytesRead = Glibc.read(STDIN_FILENO, &byte, 1)
@@ -83,7 +117,7 @@ public class Terminal {
         #endif
 
         if bytesRead == 1 {
-            return Character(UnicodeScalar(byte))
+            return byte
         } else if bytesRead == -1 {
             // Handle error, e.g., EAGAIN for non-blocking read with no data
             // For now, just return nil
@@ -92,7 +126,7 @@ public class Terminal {
     }
 
     /// Writes a string to standard output.
-    public static func write(_ string: String) {
+    public func write(_ string: String) {
         #if os(Linux)
         _ = string.withCString { ptr in
             Glibc.write(STDOUT_FILENO, ptr, Glibc.strlen(ptr))
@@ -105,7 +139,7 @@ public class Terminal {
     }
 
     /// Writes a character to standard output.
-    public static func write(_ char: Character) {
+    public func write(_ char: Character) {
         if let asciiValue = char.asciiValue {
             var byte = asciiValue
             #if os(Linux)
@@ -117,12 +151,12 @@ public class Terminal {
     }
 
     /// Writes a character to the internal screen buffer at the specified coordinates with given colors.
-    public static func writeToBuffer(x: Int, y: Int, char: Character, foreground: ANSIColor = .default, background: ANSIColor = .default) {
+    public func writeToBuffer(x: Int, y: Int, char: Character, foreground: ANSIColor = .default, background: ANSIColor = .default) {
         currentBuffer.setCell(x: x, y: y, cell: Cell(character: char, foregroundColor: foreground, backgroundColor: background))
     }
 
     /// Renders the current screen buffer to the actual terminal, optimizing by only writing changed cells.
-    public static func renderBuffer() {
+    public func renderBuffer() {
         var outputString = ""
         var lastFg = ANSIColor.default
         var lastBg = ANSIColor.default
@@ -164,7 +198,7 @@ public class Terminal {
         outputString += "\u{001B}[0m" // Reset attributes
         outputString += "\u{001B}[\(currentBuffer.height + 1);1H" // Move cursor below content
 
-        write(outputString)
+        self.write(outputString)
 
         // After rendering, the current buffer becomes the previous buffer for the next frame
         previousBuffer = currentBuffer
@@ -172,29 +206,48 @@ public class Terminal {
     }
 
     /// Clears the terminal screen by filling the current buffer with empty cells.
-    public static func clearScreen() {
-        currentBuffer.fill(with: Cell())
+    public func clearScreen() {
+        self.currentBuffer.fill(with: Cell())
     }
 
     /// Moves the cursor to a specific position (row, column).
     /// Rows and columns are 1-based.
-    public static func moveCursor(toX x: Int, y: Int) {
-        write("\u{001B}[\(y + 1);\(x + 1)H") // ANSI escape code to move cursor (1-based)
+    public func moveCursor(to point: Point) {
+        cursorPosition = point
+        self.write("\u{001B}[\(point.y + 1);\(point.x + 1)H") // ANSI escape code to move cursor (1-based)
     }
 
     /// Hides the cursor.
-    public static func hideCursor() {
-        write("\u{001B}[?25l") // ANSI escape code to hide cursor
+    public func hideCursor() {
+        isCursorHidden = true
+        self.write("\u{001B}[?25l") // ANSI escape code to hide cursor
     }
 
     /// Shows the cursor.
-    public static func showCursor() {
-        write("\u{001B}[?25h") // ANSI escape code to show cursor
+    public func showCursor() {
+        isCursorHidden = false
+        self.write("\u{001B}[?25h") // ANSI escape code to show cursor
     }
 
     /// Retrieves the current terminal window size.
     /// Returns a tuple (width, height) or nil if the size cannot be determined.
-    public static func getWindowSize() -> (width: Int, height: Int)? {
+    public func getWindowSize() -> Size {
+        var size = winsize()
+        let fd = STDOUT_FILENO // Use stdout for ioctl
+
+        #if os(Linux)
+        if Glibc.ioctl(fd, UInt(TIOCGWINSZ), &size) == 0 {
+            return Size(width: Int(size.ws_col), height: Int(size.ws_row))
+        }
+        #else
+        if Darwin.ioctl(fd, UInt(TIOCGWINSZ), &size) == 0 {
+            return Size(width: Int(size.ws_col), height: Int(size.ws_row))
+        }
+        #endif
+        return Size(width: 80, height: 24) // Default size if cannot be determined
+    }
+
+    public static func getStaticWindowSize() -> (width: Int, height: Int)? {
         var size = winsize()
         let fd = STDOUT_FILENO // Use stdout for ioctl
 

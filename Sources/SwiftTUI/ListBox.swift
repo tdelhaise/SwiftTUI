@@ -66,16 +66,16 @@ open class ListBox: BaseView {
 
                 let lineToDisplay = String(itemText.prefix(frame.size.width))
                 for (charIndex, char) in lineToDisplay.enumerated() {
-                    Terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: char, foreground: fgColor, background: bgColor)
+                    Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: char, foreground: fgColor, background: bgColor)
                 }
                 // Fill remaining space with background color
                 for charIndex in lineToDisplay.count..<frame.size.width {
-                    Terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: " ", foreground: fgColor, background: bgColor)
+                    Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: " ", foreground: fgColor, background: bgColor)
                 }
             } else {
                 // Draw empty line if no more items
                 for charIndex in 0..<frame.size.width {
-                    Terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: " ", foreground: defaultDesktopColors.foreground, background: defaultDesktopColors.background)
+                    Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: " ", foreground: defaultDesktopColors.foreground, background: defaultDesktopColors.background)
                 }
             }
         }

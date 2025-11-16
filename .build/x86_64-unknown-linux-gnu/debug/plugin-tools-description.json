@@ -508,15 +508,19 @@
       "inputs" : [
         {
           "kind" : "file",
-          "name" : "/home/thierry/Code/SwiftTUI/Tests/TvisionUITests/SwiftTUITests.swift"
+          "name" : "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/MockTerminal.swift"
         },
         {
           "kind" : "file",
-          "name" : "/home/thierry/Code/SwiftTUI/Tests/TvisionUITests/TerminalTests.swift"
+          "name" : "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/SwiftTUITests.swift"
         },
         {
           "kind" : "file",
-          "name" : "/home/thierry/Code/SwiftTUI/Tests/TvisionUITests/WindowTests.swift"
+          "name" : "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/TerminalTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/WindowTests.swift"
         },
         {
           "kind" : "file",
@@ -535,6 +539,7 @@
       "moduleName" : "SwiftTUITests",
       "moduleOutputPath" : "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/Modules/SwiftTUITests.swiftmodule",
       "objects" : [
+        "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUITests.build/MockTerminal.swift.o",
         "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUITests.build/SwiftTUITests.swift.o",
         "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUITests.build/TerminalTests.swift.o",
         "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUITests.build/WindowTests.swift.o"
@@ -576,6 +581,10 @@
       "outputs" : [
         {
           "kind" : "file",
+          "name" : "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUITests.build/MockTerminal.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUITests.build/SwiftTUITests.swift.o"
         },
         {
@@ -593,9 +602,10 @@
       ],
       "prepareForIndexing" : false,
       "sources" : [
-        "/home/thierry/Code/SwiftTUI/Tests/TvisionUITests/SwiftTUITests.swift",
-        "/home/thierry/Code/SwiftTUI/Tests/TvisionUITests/TerminalTests.swift",
-        "/home/thierry/Code/SwiftTUI/Tests/TvisionUITests/WindowTests.swift"
+        "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/MockTerminal.swift",
+        "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/SwiftTUITests.swift",
+        "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/TerminalTests.swift",
+        "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/WindowTests.swift"
       ],
       "tempsPath" : "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUITests.build",
       "wholeModuleOptimization" : false
@@ -771,9 +781,10 @@
       "-package-name",
       "swifttui",
       "-c",
-      "/home/thierry/Code/SwiftTUI/Tests/TvisionUITests/SwiftTUITests.swift",
-      "/home/thierry/Code/SwiftTUI/Tests/TvisionUITests/TerminalTests.swift",
-      "/home/thierry/Code/SwiftTUI/Tests/TvisionUITests/WindowTests.swift",
+      "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/MockTerminal.swift",
+      "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/SwiftTUITests.swift",
+      "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/TerminalTests.swift",
+      "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/WindowTests.swift",
       "-I",
       "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/Modules",
       "-target",
@@ -831,6 +842,10 @@
   "testDiscoveryCommands" : {
     "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.derived/all-discovered-tests.swift" : {
       "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUITests.build/MockTerminal.swift.o"
+        },
         {
           "kind" : "file",
           "name" : "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUITests.build/SwiftTUITests.swift.o"
@@ -1145,6 +1160,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUITests.build/MockTerminal.swift.o"
+        },
+        {
+          "kind" : "file",
           "name" : "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUITests.build/SwiftTUITests.swift.o"
         },
         {
@@ -1171,15 +1190,19 @@
         },
         {
           "kind" : "file",
-          "name" : "/home/thierry/Code/SwiftTUI/Tests/TvisionUITests/SwiftTUITests.swift"
+          "name" : "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/MockTerminal.swift"
         },
         {
           "kind" : "file",
-          "name" : "/home/thierry/Code/SwiftTUI/Tests/TvisionUITests/TerminalTests.swift"
+          "name" : "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/SwiftTUITests.swift"
         },
         {
           "kind" : "file",
-          "name" : "/home/thierry/Code/SwiftTUI/Tests/TvisionUITests/WindowTests.swift"
+          "name" : "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/TerminalTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/home/thierry/Code/SwiftTUI/Tests/SwiftTUITests/WindowTests.swift"
         }
       ],
       "outputFilePath" : "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUITests.build/sources"

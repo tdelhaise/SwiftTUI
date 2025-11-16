@@ -169,16 +169,16 @@ open class MemoView: BaseView {
                 }
 
                 for (charIndex, char) in line.enumerated() {
-                    Terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: char, foreground: fgColor, background: bgColor)
+                    Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: char, foreground: fgColor, background: bgColor)
                 }
                 // Fill remaining space with background color
                 for charIndex in line.count..<visibleWidth {
-                    Terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: " ", foreground: fgColor, background: bgColor)
+                    Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: " ", foreground: fgColor, background: bgColor)
                 }
             } else {
                 // Draw empty line
                 for charIndex in 0..<visibleWidth {
-                    Terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: " ", foreground: fgColor, background: bgColor)
+                    Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: " ", foreground: fgColor, background: bgColor)
                 }
             }
         }
@@ -199,7 +199,7 @@ open class MemoView: BaseView {
                 } else {
                     cursorChar = " " // Draw a space if cursor is at the end of a line or new line
                 }
-                Terminal.writeToBuffer(x: cursorGlobalX, y: cursorGlobalY, char: cursorChar, foreground: bgColor, background: fgColor) // Invert colors for cursor
+                Application.shared.terminal.writeToBuffer(x: cursorGlobalX, y: cursorGlobalY, char: cursorChar, foreground: bgColor, background: fgColor) // Invert colors for cursor
             }
         }
 
@@ -209,11 +209,11 @@ open class MemoView: BaseView {
             let errorY = frame.origin.y + frame.size.height
             let errorToDisplay = String(message.prefix(frame.size.width))
             for (index, char) in errorToDisplay.enumerated() {
-                Terminal.writeToBuffer(x: errorX + index, y: errorY, char: char, foreground: .brightRed, background: .default)
+                Application.shared.terminal.writeToBuffer(x: errorX + index, y: errorY, char: char, foreground: .brightRed, background: .default)
             }
             // Clear rest of the line
             for charIndex in errorToDisplay.count..<frame.size.width {
-                Terminal.writeToBuffer(x: errorX + charIndex, y: errorY, char: " ", foreground: .brightRed, background: .default)
+                Application.shared.terminal.writeToBuffer(x: errorX + charIndex, y: errorY, char: " ", foreground: .brightRed, background: .default)
             }
         }
     }

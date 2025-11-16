@@ -84,12 +84,12 @@ open class InputLine: BaseView {
         let visibleText = String(text.prefix(frame.size.width))
 
         for (index, char) in visibleText.enumerated() {
-            Terminal.writeToBuffer(x: displayX + index, y: displayY, char: char, foreground: fgColor, background: bgColor)
+            Application.shared.terminal.writeToBuffer(x: displayX + index, y: displayY, char: char, foreground: fgColor, background: bgColor)
         }
 
         // Fill remaining space with background color
         for charIndex in visibleText.count..<frame.size.width {
-            Terminal.writeToBuffer(x: displayX + charIndex, y: displayY, char: " ", foreground: fgColor, background: bgColor)
+            Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY, char: " ", foreground: fgColor, background: bgColor)
         }
 
         // Draw cursor if focused
@@ -101,7 +101,7 @@ open class InputLine: BaseView {
             } else {
                 cursorChar = " " // Draw a space if cursor is at the end of the text
             }
-            Terminal.writeToBuffer(x: displayX + cursorPosition, y: displayY, char: cursorChar, foreground: bgColor, background: fgColor) // Invert colors for cursor
+            Application.shared.terminal.writeToBuffer(x: displayX + cursorPosition, y: displayY, char: cursorChar, foreground: bgColor, background: fgColor) // Invert colors for cursor
         }
 
         // Display error message below the input line if invalid
@@ -110,11 +110,11 @@ open class InputLine: BaseView {
             let errorY = frame.origin.y + frame.size.height
             let errorToDisplay = String(message.prefix(frame.size.width))
             for (index, char) in errorToDisplay.enumerated() {
-                Terminal.writeToBuffer(x: errorX + index, y: errorY, char: char, foreground: .brightRed, background: .default)
+                Application.shared.terminal.writeToBuffer(x: errorX + index, y: errorY, char: char, foreground: .brightRed, background: .default)
             }
             // Clear rest of the line
             for charIndex in errorToDisplay.count..<frame.size.width {
-                Terminal.writeToBuffer(x: errorX + charIndex, y: errorY, char: " ", foreground: .brightRed, background: .default)
+                Application.shared.terminal.writeToBuffer(x: errorX + charIndex, y: errorY, char: " ", foreground: .brightRed, background: .default)
             }
         }
     }

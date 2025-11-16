@@ -37,19 +37,19 @@ open class MenuBox: BaseView {
         let selectedColors = Application.currentColorTheme.currentPalette[.menuBoxSelected]
 
         // Draw border
-        Terminal.writeToBuffer(x: x, y: y, char: "┌", foreground: normalColors.foreground, background: normalColors.background)
-        Terminal.writeToBuffer(x: x + width - 1, y: y, char: "┐", foreground: normalColors.foreground, background: normalColors.background)
-        Terminal.writeToBuffer(x: x, y: y + height - 1, char: "└", foreground: normalColors.foreground, background: normalColors.background)
-        Terminal.writeToBuffer(x: x + width - 1, y: y + height - 1, char: "┘", foreground: normalColors.foreground, background: normalColors.background)
+        Application.shared.terminal.writeToBuffer(x: x, y: y, char: "┌", foreground: normalColors.foreground, background: normalColors.background)
+        Application.shared.terminal.writeToBuffer(x: x + width - 1, y: y, char: "┐", foreground: normalColors.foreground, background: normalColors.background)
+        Application.shared.terminal.writeToBuffer(x: x, y: y + height - 1, char: "└", foreground: normalColors.foreground, background: normalColors.background)
+        Application.shared.terminal.writeToBuffer(x: x + width - 1, y: y + height - 1, char: "┘", foreground: normalColors.foreground, background: normalColors.background)
 
         for i in 1..<(width - 1) {
-            Terminal.writeToBuffer(x: x + i, y: y, char: "─", foreground: normalColors.foreground, background: normalColors.background)
-            Terminal.writeToBuffer(x: x + i, y: y + height - 1, char: "─", foreground: normalColors.foreground, background: normalColors.background)
+            Application.shared.terminal.writeToBuffer(x: x + i, y: y, char: "─", foreground: normalColors.foreground, background: normalColors.background)
+            Application.shared.terminal.writeToBuffer(x: x + i, y: y + height - 1, char: "─", foreground: normalColors.foreground, background: normalColors.background)
         }
 
         for i in 1..<(height - 1) {
-            Terminal.writeToBuffer(x: x, y: y + i, char: "│", foreground: normalColors.foreground, background: normalColors.background)
-            Terminal.writeToBuffer(x: x + width - 1, y: y + i, char: "│", foreground: normalColors.foreground, background: normalColors.background)
+            Application.shared.terminal.writeToBuffer(x: x, y: y + i, char: "│", foreground: normalColors.foreground, background: normalColors.background)
+            Application.shared.terminal.writeToBuffer(x: x + width - 1, y: y + i, char: "│", foreground: normalColors.foreground, background: normalColors.background)
         }
 
         // Draw menu items
@@ -68,11 +68,11 @@ open class MenuBox: BaseView {
 
             let lineToDisplay = String(itemText.prefix(width - 2)) // Account for borders
             for (charIndex, char) in lineToDisplay.enumerated() {
-                Terminal.writeToBuffer(x: displayX + charIndex, y: displayY, char: char, foreground: currentFg, background: currentBg)
+                Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY, char: char, foreground: currentFg, background: currentBg)
             }
             // Fill remaining space with background color
             for charIndex in lineToDisplay.count..<(width - 2) {
-                Terminal.writeToBuffer(x: displayX + charIndex, y: displayY, char: " ", foreground: currentFg, background: currentBg)
+                Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY, char: " ", foreground: currentFg, background: currentBg)
             }
         }
     }

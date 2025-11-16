@@ -19,7 +19,7 @@ open class Label: BaseView {
 
         for (index, char) in text.enumerated() {
             if displayX + index < frame.origin.x + frame.size.width { // Ensure character is within bounds
-                Terminal.writeToBuffer(x: displayX + index, y: displayY, char: char, foreground: labelColors.foreground, background: labelColors.background)
+                Application.shared.terminal.writeToBuffer(x: displayX + index, y: displayY, char: char, foreground: labelColors.foreground, background: labelColors.background)
             }
         }
     }

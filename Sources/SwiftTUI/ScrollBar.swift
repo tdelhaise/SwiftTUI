@@ -46,7 +46,7 @@ open class ScrollBar: BaseView {
 
             // Draw track
             for yOffset in 0..<trackHeight {
-                Terminal.writeToBuffer(x: displayX, y: displayY + yOffset, char: "│", foreground: trackColors.foreground, background: trackColors.background)
+                Application.shared.terminal.writeToBuffer(x: displayX, y: displayY + yOffset, char: "│", foreground: trackColors.foreground, background: trackColors.background)
             }
 
             // Calculate thumb size and position
@@ -55,12 +55,12 @@ open class ScrollBar: BaseView {
 
             // Draw thumb
             for yOffset in 0..<thumbSize {
-                Terminal.writeToBuffer(x: displayX, y: displayY + thumbStart + yOffset, char: "█", foreground: thumbColors.foreground, background: thumbColors.background)
+                Application.shared.terminal.writeToBuffer(x: displayX, y: displayY + thumbStart + yOffset, char: "█", foreground: thumbColors.foreground, background: thumbColors.background)
             }
 
             // Draw arrows (optional)
-            Terminal.writeToBuffer(x: displayX, y: displayY, char: "▲", foreground: trackColors.foreground, background: trackColors.background)
-            Terminal.writeToBuffer(x: displayX, y: displayY + trackHeight - 1, char: "▼", foreground: trackColors.foreground, background: trackColors.background)
+            Application.shared.terminal.writeToBuffer(x: displayX, y: displayY, char: "▲", foreground: trackColors.foreground, background: trackColors.background)
+            Application.shared.terminal.writeToBuffer(x: displayX, y: displayY + trackHeight - 1, char: "▼", foreground: trackColors.foreground, background: trackColors.background)
 
         } else { // Horizontal
             let trackWidth = frame.size.width
@@ -68,7 +68,7 @@ open class ScrollBar: BaseView {
 
             // Draw track
             for xOffset in 0..<trackWidth {
-                Terminal.writeToBuffer(x: displayX + xOffset, y: displayY, char: "─", foreground: trackColors.foreground, background: trackColors.background)
+                Application.shared.terminal.writeToBuffer(x: displayX + xOffset, y: displayY, char: "─", foreground: trackColors.foreground, background: trackColors.background)
             }
 
             // Calculate thumb size and position
@@ -77,12 +77,12 @@ open class ScrollBar: BaseView {
 
             // Draw thumb
             for xOffset in 0..<thumbSize {
-                Terminal.writeToBuffer(x: displayX + thumbStart + xOffset, y: displayY, char: "█", foreground: thumbColors.foreground, background: thumbColors.background)
+                Application.shared.terminal.writeToBuffer(x: displayX + thumbStart + xOffset, y: displayY, char: "█", foreground: thumbColors.foreground, background: thumbColors.background)
             }
 
             // Draw arrows (optional)
-            Terminal.writeToBuffer(x: displayX, y: displayY, char: "◀", foreground: trackColors.foreground, background: trackColors.background)
-            Terminal.writeToBuffer(x: displayX + trackWidth - 1, y: displayY, char: "▶", foreground: trackColors.foreground, background: trackColors.background)
+            Application.shared.terminal.writeToBuffer(x: displayX, y: displayY, char: "◀", foreground: trackColors.foreground, background: trackColors.background)
+            Application.shared.terminal.writeToBuffer(x: displayX + trackWidth - 1, y: displayY, char: "▶", foreground: trackColors.foreground, background: trackColors.background)
         }
     }
 

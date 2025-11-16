@@ -24,7 +24,7 @@ open class Button: BaseView {
         let bgColor = colors.background
 
         for (index, char) in displayTitle.enumerated() {
-            Terminal.writeToBuffer(x: textX + index, y: textY, char: char, foreground: fgColor, background: bgColor)
+            Application.shared.terminal.writeToBuffer(x: textX + index, y: textY, char: char, foreground: fgColor, background: bgColor)
         }
     }
 

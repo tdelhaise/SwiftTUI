@@ -122,7 +122,7 @@ open class Window: BaseView {
         let titleColors = state.contains(.sfFocused) ? Application.currentColorTheme.currentPalette[.windowTitleActive] : Application.currentColorTheme.currentPalette[.windowTitleNormal]
 
         for (index, char) in titleToDisplay.enumerated() {
-            Terminal.writeToBuffer(x: titleX + index, y: titleY, char: char, foreground: titleColors.foreground, background: titleColors.background)
+            Application.shared.terminal.writeToBuffer(x: titleX + index, y: titleY, char: char, foreground: titleColors.foreground, background: titleColors.background)
         }
     }
 
@@ -169,21 +169,21 @@ open class Window: BaseView {
             guard width >= 2 && height >= 2 else { return }
 
             // Draw corners
-            Terminal.writeToBuffer(x: x, y: y, char: "┌", foreground: fgColor, background: bgColor)
-            Terminal.writeToBuffer(x: x + width - 1, y: y, char: "┐", foreground: fgColor, background: bgColor)
-            Terminal.writeToBuffer(x: x, y: y + height - 1, char: "└", foreground: fgColor, background: bgColor)
-            Terminal.writeToBuffer(x: x + width - 1, y: y + height - 1, char: "┘", foreground: fgColor, background: bgColor)
+            Application.shared.terminal.writeToBuffer(x: x, y: y, char: "┌", foreground: fgColor, background: bgColor)
+            Application.shared.terminal.writeToBuffer(x: x + width - 1, y: y, char: "┐", foreground: fgColor, background: bgColor)
+            Application.shared.terminal.writeToBuffer(x: x, y: y + height - 1, char: "└", foreground: fgColor, background: bgColor)
+            Application.shared.terminal.writeToBuffer(x: x + width - 1, y: y + height - 1, char: "┘", foreground: fgColor, background: bgColor)
 
             // Draw horizontal borders
             for i in 1..<(width - 1) {
-                Terminal.writeToBuffer(x: x + i, y: y, char: "─", foreground: fgColor, background: bgColor) // Top
-                Terminal.writeToBuffer(x: x + i, y: y + height - 1, char: "─", foreground: fgColor, background: bgColor) // Bottom
+                Application.shared.terminal.writeToBuffer(x: x + i, y: y, char: "─", foreground: fgColor, background: bgColor) // Top
+                Application.shared.terminal.writeToBuffer(x: x + i, y: y + height - 1, char: "─", foreground: fgColor, background: bgColor) // Bottom
             }
 
             // Draw vertical borders
             for i in 1..<(height - 1) {
-                Terminal.writeToBuffer(x: x, y: y + i, char: "│", foreground: fgColor, background: bgColor) // Left
-                Terminal.writeToBuffer(x: x + width - 1, y: y + i, char: "│", foreground: fgColor, background: bgColor) // Right
+                Application.shared.terminal.writeToBuffer(x: x, y: y + i, char: "│", foreground: fgColor, background: bgColor) // Left
+                Application.shared.terminal.writeToBuffer(x: x + width - 1, y: y + i, char: "│", foreground: fgColor, background: bgColor) // Right
             }
         }
     }

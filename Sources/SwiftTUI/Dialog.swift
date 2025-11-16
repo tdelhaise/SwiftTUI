@@ -38,11 +38,11 @@ open class Dialog: Window {
 
             let lineToDisplay = String(line.prefix(contentWidth)) // Truncate if too long
             for (index, char) in lineToDisplay.enumerated() {
-                Terminal.writeToBuffer(x: contentX + index, y: currentDisplayY, char: char, foreground: messageColors.foreground, background: messageColors.background)
+                Application.shared.terminal.writeToBuffer(x: contentX + index, y: currentDisplayY, char: char, foreground: messageColors.foreground, background: messageColors.background)
             }
             // Fill remaining space with background color
             for charIndex in lineToDisplay.count..<contentWidth {
-                Terminal.writeToBuffer(x: contentX + charIndex, y: currentDisplayY, char: " ", foreground: messageColors.foreground, background: messageColors.background)
+                Application.shared.terminal.writeToBuffer(x: contentX + charIndex, y: currentDisplayY, char: " ", foreground: messageColors.foreground, background: messageColors.background)
             }
             currentDisplayY += 1
         }

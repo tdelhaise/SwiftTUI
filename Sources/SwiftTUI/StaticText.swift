@@ -25,7 +25,7 @@ open class StaticText: BaseView {
 
             let lineToDisplay = String(line.prefix(frame.size.width)) // Truncate if too long
             for (index, char) in lineToDisplay.enumerated() {
-                Terminal.writeToBuffer(x: displayX + index, y: currentDisplayY, char: char, foreground: staticTextColors.foreground, background: staticTextColors.background)
+                Application.shared.terminal.writeToBuffer(x: displayX + index, y: currentDisplayY, char: char, foreground: staticTextColors.foreground, background: staticTextColors.background)
             }
             currentDisplayY += 1
         }
