@@ -1,0 +1,19 @@
+{
+  "": {
+    "swift-dependencies": "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.build/master.swiftdeps"
+  },
+  "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.derived/SwiftTUITests.swift": {
+    "dependencies": "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.build/SwiftTUITests.d",
+    "object": "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.build/SwiftTUITests.swift.o",
+    "swiftmodule": "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.build/SwiftTUITests~partial.swiftmodule",
+    "swift-dependencies": "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.build/SwiftTUITests.swiftdeps",
+    "diagnostics": "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.build/SwiftTUITests.dia"
+  },
+  "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.derived/all-discovered-tests.swift": {
+    "dependencies": "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.build/all-discovered-tests.d",
+    "object": "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.build/all-discovered-tests.swift.o",
+    "swiftmodule": "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.build/all-discovered-tests~partial.swiftmodule",
+    "swift-dependencies": "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.build/all-discovered-tests.swiftdeps",
+    "diagnostics": "/home/thierry/Code/SwiftTUI/.build/x86_64-unknown-linux-gnu/debug/SwiftTUIPackageDiscoveredTests.build/all-discovered-tests.dia"
+  }
+}
