@@ -1,0 +1,18 @@
+# Xcode
+.DS_Store
+/build/
+/*.xcodeproj
+/*.xcworkspace
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Dependencies
+/Packages/
+
+# macOS
+.DS_Store
+
+# Gemini specific
+GEMINI.md
