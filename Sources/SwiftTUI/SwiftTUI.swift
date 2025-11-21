@@ -477,6 +477,10 @@ public class HistoryManager {
         history.removeAll()
         currentIndex = -1
     }
+
+    public func allEntries() -> [HistoryEntry] {
+        return history
+    }
 }
 
 // OptionSet for view states.
