@@ -69,6 +69,14 @@ class MockTerminal: TerminalProtocol {
         isCursorHidden = false
         capturedOutput += ANSI.showCursor
     }
+    
+    func enterAlternateScreen() {
+        capturedOutput += ANSI.enterAlternateScreen
+    }
+
+    func exitAlternateScreen() {
+        capturedOutput += ANSI.exitAlternateScreen
+    }
 
     func getWindowSize() -> Size {
         return windowSize

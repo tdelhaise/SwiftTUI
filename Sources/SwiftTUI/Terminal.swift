@@ -26,6 +26,8 @@ import Darwin.C
     func moveCursor(to point: Point)
     func hideCursor()
     func showCursor()
+    func enterAlternateScreen()
+    func exitAlternateScreen()
     func getWindowSize() -> Size
     func writeToBuffer(x: Int, y: Int, char: Character, foreground: ANSIColor, background: ANSIColor)
     func renderBuffer()
@@ -298,6 +300,24 @@ public class Terminal: TerminalProtocol {
             self.write(sequence)
         } else {
             self.write(ANSI.cursorPosition(row: point.y + 1, col: point.x + 1))
+        }
+    }
+
+    /// Enters the alternate screen buffer if supported.
+    public func enterAlternateScreen() {
+        if let sequence = capabilities.enterAltScreenSequence {
+            self.write(sequence)
+        } else {
+            self.write(ANSI.enterAlternateScreen)
+        }
+    }
+
+    /// Exits the alternate screen buffer if supported.
+    public func exitAlternateScreen() {
+        if let sequence = capabilities.exitAltScreenSequence {
+            self.write(sequence)
+        } else {
+            self.write(ANSI.exitAlternateScreen)
         }
     }
 

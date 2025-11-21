@@ -15,6 +15,12 @@ public struct ANSI {
     /// Shows the cursor.
     public static let showCursor = "\u{001B}[?25h"
 
+    /// Enters the terminal's alternate screen buffer.
+    public static let enterAlternateScreen = "\u{001B}[?1049h"
+
+    /// Exits the terminal's alternate screen buffer.
+    public static let exitAlternateScreen = "\u{001B}[?1049l"
+
     // MARK: - Screen Control
 
     /// Clears the entire screen.

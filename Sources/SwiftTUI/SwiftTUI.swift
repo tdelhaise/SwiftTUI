@@ -662,6 +662,7 @@ public class Application {
 
     private func cleanupTerminal() {
         try? terminal.disableRawMode()
+        terminal.exitAlternateScreen()
         terminal.showCursor()
         terminal.clearScreen()
     }
@@ -695,6 +696,7 @@ public class Application {
 
         do {
             try terminal.enableRawMode()
+            terminal.enterAlternateScreen()
             terminal.hideCursor()
             setupSignalHandlers()
 
