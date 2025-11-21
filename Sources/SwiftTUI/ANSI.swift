@@ -86,3 +86,30 @@ public enum ANSIColor: UInt8, CaseIterable, Sendable {
     case brightCyan = 96
     case brightWhite = 97
 }
+
+extension ANSIColor {
+    /// Best-effort mapping from ANSI SGR to terminfo color index.
+    /// Returns nil for `.default`.
+    var terminfoIndex: Int? {
+        switch self {
+        case .default:
+            return nil
+        case .black: return 0
+        case .red: return 1
+        case .green: return 2
+        case .yellow: return 3
+        case .blue: return 4
+        case .magenta: return 5
+        case .cyan: return 6
+        case .white: return 7
+        case .brightBlack: return 8
+        case .brightRed: return 9
+        case .brightGreen: return 10
+        case .brightYellow: return 11
+        case .brightBlue: return 12
+        case .brightMagenta: return 13
+        case .brightCyan: return 14
+        case .brightWhite: return 15
+        }
+    }
+}

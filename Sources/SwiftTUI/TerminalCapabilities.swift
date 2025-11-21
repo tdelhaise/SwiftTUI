@@ -20,6 +20,9 @@ public struct TerminalCapabilities: Sendable {
     public let showCursorSequence: String?
     public let enterAltScreenSequence: String?
     public let exitAltScreenSequence: String?
+    public let setForegroundSequence: String?
+    public let setBackgroundSequence: String?
+    public let resetColorsSequence: String?
 
     /// Fallback capabilities when terminfo is unavailable.
     public static let fallback = TerminalCapabilities(
@@ -31,7 +34,10 @@ public struct TerminalCapabilities: Sendable {
         hideCursorSequence: nil,
         showCursorSequence: nil,
         enterAltScreenSequence: nil,
-        exitAltScreenSequence: nil
+        exitAltScreenSequence: nil,
+        setForegroundSequence: nil,
+        setBackgroundSequence: nil,
+        resetColorsSequence: nil
     )
 
     /// Attempts to load capabilities via terminfo for the current terminal.
@@ -70,6 +76,9 @@ public struct TerminalCapabilities: Sendable {
         let showCursorSequence = Self.getStringCapability("cnorm")
         let enterAltScreenSequence = Self.getStringCapability("smcup")
         let exitAltScreenSequence = Self.getStringCapability("rmcup")
+        let setForegroundSequence = Self.getStringCapability("setaf")
+        let setBackgroundSequence = Self.getStringCapability("setab")
+        let resetColorsSequence = Self.getStringCapability("op")
 
         return TerminalCapabilities(
             terminalName: terminalName,
@@ -80,7 +89,10 @@ public struct TerminalCapabilities: Sendable {
             hideCursorSequence: hideCursorSequence,
             showCursorSequence: showCursorSequence,
             enterAltScreenSequence: enterAltScreenSequence,
-            exitAltScreenSequence: exitAltScreenSequence
+            exitAltScreenSequence: exitAltScreenSequence,
+            setForegroundSequence: setForegroundSequence,
+            setBackgroundSequence: setBackgroundSequence,
+            resetColorsSequence: resetColorsSequence
         )
     }
 
@@ -98,9 +110,23 @@ public struct TerminalCapabilities: Sendable {
         return TerminalCapabilities.expand(capability: sequence, parameters: [Int32(row), Int32(column)])
     }
 
+    /// Builds a foreground color sequence for the given ANSIColor using terminfo, if available.
+    public func foreground(color: ANSIColor) -> String? {
+        guard let sequence = setForegroundSequence else { return nil }
+        guard let index = color.terminfoIndex else { return nil }
+        return TerminalCapabilities.expand(capability: sequence, parameters: [Int32(index)])
+    }
+
+    /// Builds a background color sequence for the given ANSIColor using terminfo, if available.
+    public func background(color: ANSIColor) -> String? {
+        guard let sequence = setBackgroundSequence else { return nil }
+        guard let index = color.terminfoIndex else { return nil }
+        return TerminalCapabilities.expand(capability: sequence, parameters: [Int32(index)])
+    }
+
     // MARK: - Helpers
 
-    private static func expand(capability: String, parameters: [Int32]) -> String? {
+    static func expand(capability: String, parameters: [Int32]) -> String? {
         var args = parameters
         if args.count < 9 {
             args.append(contentsOf: Array(repeating: 0, count: 9 - args.count))

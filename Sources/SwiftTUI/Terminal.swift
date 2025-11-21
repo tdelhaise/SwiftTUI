@@ -219,6 +219,7 @@ public class Terminal: TerminalProtocol {
         var currentBg = ANSIColor.default
         var currentX = -1
         var currentY = -1
+        var attributesReset = false
 
         // Ensure cursor is visible before rendering if it was hidden
         if isCursorHidden {
@@ -245,14 +246,14 @@ public class Terminal: TerminalProtocol {
                 if outputCell != previousCell {
                     if x != currentX + 1 || row != currentY || outputCell.foregroundColor != currentFg || outputCell.backgroundColor != currentBg {
                         outputString += ANSI.cursorPosition(row: row + 1, col: x + 1)
-                        if outputCell.foregroundColor != currentFg {
-                            outputString += ANSI.foregroundColor(outputCell.foregroundColor)
-                            currentFg = outputCell.foregroundColor
-                        }
-                        if outputCell.backgroundColor != currentBg {
-                            outputString += ANSI.backgroundColor(outputCell.backgroundColor)
-                            currentBg = outputCell.backgroundColor
-                        }
+                        updateColorsString(
+                            output: &outputString,
+                            fg: outputCell.foregroundColor,
+                            bg: outputCell.backgroundColor,
+                            currentFg: &currentFg,
+                            currentBg: &currentBg,
+                            attributesReset: &attributesReset
+                        )
                     }
                     outputString += String(outputCell.character)
                     currentX = x
@@ -272,6 +273,36 @@ public class Terminal: TerminalProtocol {
         // After rendering, the current buffer becomes the previous buffer for the next frame
         previousBuffer = nextPreviousBuffer
         currentBuffer = ScreenBuffer(width: currentBuffer.width, height: currentBuffer.height) // Reset current buffer
+    }
+
+    private func updateColorsString(output: inout String, fg: ANSIColor, bg: ANSIColor, currentFg: inout ANSIColor, currentBg: inout ANSIColor, attributesReset: inout Bool) {
+        if fg != currentFg || bg != currentBg {
+            if fg == .default && bg == .default, let resetSeq = capabilities.resetColorsSequence {
+                output += resetSeq
+                attributesReset = true
+            } else if attributesReset {
+                output += ANSI.resetAttributes
+                attributesReset = false
+            }
+        }
+
+        if fg != currentFg {
+            if let seq = capabilities.foreground(color: fg) {
+                output += seq
+            } else {
+                output += ANSI.foregroundColor(fg)
+            }
+            currentFg = fg
+        }
+
+        if bg != currentBg {
+            if let seq = capabilities.background(color: bg) {
+                output += seq
+            } else {
+                output += ANSI.backgroundColor(bg)
+            }
+            currentBg = bg
+        }
     }
 
     /// Clears the terminal screen by filling the current buffer with empty cells.
