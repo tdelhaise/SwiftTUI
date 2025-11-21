@@ -620,7 +620,10 @@ public class Application {
     public let terminal: TerminalProtocol // Dependency injection for Terminal
     private var pendingDirtyRects: [Rect] = []
     private var clipboardStorage: String = ""
-    public var clipboardManager: ClipboardManaging = OSC52ClipboardManager()
+    public var clipboardManager: ClipboardManaging = MultiClipboardManager([
+        SystemClipboardManager(),
+        OSC52ClipboardManager()
+    ])
 
     private var inputLoop: TerminalInputLoop?
     private var timerHandlers: [TimerToken: @Sendable () -> Void] = [:]
