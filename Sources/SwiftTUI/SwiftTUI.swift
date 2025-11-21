@@ -620,6 +620,7 @@ public class Application {
     public let terminal: TerminalProtocol // Dependency injection for Terminal
     private var pendingDirtyRects: [Rect] = []
     private var clipboardStorage: String = ""
+    public var clipboardManager: ClipboardManaging = OSC52ClipboardManager()
 
     private var inputLoop: TerminalInputLoop?
     private var timerHandlers: [TimerToken: @Sendable () -> Void] = [:]
@@ -849,10 +850,10 @@ public class Application {
 
     func setClipboardText(_ text: String) {
         clipboardStorage = text
-        // TODO: send OSC 52 / far2l requests when outbound channel is ready.
+        clipboardManager.set(text)
     }
 
     func clipboardText() -> String? {
-        return clipboardStorage
+        return clipboardManager.get() ?? clipboardStorage
     }
 }
