@@ -230,6 +230,14 @@ func main() {
 
 To achieve full functionality comparable to the original C++ Tvision framework, the following key UI components and functionalities need further development or enhancement in Swift:
 
+### Widget parity (to implement 1:1 before tvedit)
+- **Scroller/ScrollView container** for arbitrary content with scrollbars.
+- **ComboBox / HistoryWindow** (text entry + dropdown/history picker).
+- **Outline/Tree viewer** and **Text/Help/Dir viewers** (read-only scrollers and navigable outlines).
+- **Surface/drawing helpers** used by these viewers.
+- **Clipboard parity** beyond OSC52.
+Prioritise TVision fidelity first; Swift optimisations come after parity.
+
 ### Low-Level System Integration:
 -   **Terminal I/O and Rendering (`tscreen.cpp`, `tsurface.cpp`, `tevent.cpp`, `tkey.cpp`, `tmouse.cpp`)**: The current `Application.run()` uses placeholders. Full TUI functionality requires integration with a low-level terminal library (e.g., ncurses or termbox) for efficient screen drawing, cursor positioning, and raw input capture.
 -   **Event Queue and Dispatching (`tevent.cpp`, `tkey.cpp`, `tmouse.cpp`)**: While basic event types are defined, the actual reading and queuing of events from the terminal input needs to be implemented.
@@ -331,6 +339,17 @@ To achieve full feature parity with the original C++ Tvision framework, the foll
 *   **Optimized Rendering Strategies:** Implement more sophisticated diffing algorithms for the `ScreenBuffer` to minimize actual terminal writes, potentially handling partial screen updates more efficiently to reduce flicker and improve performance.
 *   **Advanced Input Handling:** Develop more robust parsing of complex terminal escape sequences (e.g., for various function keys, modifier combinations beyond basic Ctrl/Alt/Shift), handling of paste events, and potentially support for more terminal-specific input features.
 *   **Sophisticated Event Loop (Blocking I/O):** Transition the `Application`'s event loop from a polling-based mechanism to a truly event-driven, blocking I/O model (using `select()` or `poll()`) to significantly reduce CPU usage when the application is idle. This also includes implementing more advanced event dispatching, such as event bubbling/tunneling and global event handlers.
+
+### Milestone 6.1: TVision Widget Parity (prior to tvedit)
+
+**Goal:** Implement missing TVision controls in Swift, 1:1, before porting `tvedit`.
+
+*   **Scroller/ScrollView container** with scrollbars for arbitrary content.
+*   **ComboBox / HistoryWindow**: text entry plus dropdown/history picker.
+*   **Outline/Tree viewer** and **Text/Help/Dir viewers**: read-only scrollers and navigable outlines.
+*   **Surface/drawing helpers** required by these viewers.
+*   **Clipboard**: match TVision behaviour beyond OSC52.
+**Note:** Prioritise fidelity to TVision; optimise later.
 
 ### Milestone 7: Advanced Editor Features
 
