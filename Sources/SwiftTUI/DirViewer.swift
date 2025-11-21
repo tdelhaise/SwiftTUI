@@ -15,7 +15,7 @@ open class DirViewer: OutlineView {
         for entry in entries.sorted() {
             let full = (path as NSString).appendingPathComponent(entry)
             var isDir: ObjCBool = false
-            fm.fileExists(atPath: full, isDirectory: &isDir)
+            _ = fm.fileExists(atPath: full, isDirectory: &isDir)
             if isDir.boolValue {
                 let children: [OutlineNode]
                 if depth < maxDepth {

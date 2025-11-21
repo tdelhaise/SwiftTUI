@@ -103,7 +103,8 @@ open class OutlineView: Scroller {
         case KeyEvent.KeyCode.rightArrow:
             expandSelection()
             return true
-        case KeyEvent.KeyCode.enter:
+        case KeyEvent.KeyCode.enter, 32:
+            toggleSelection()
             if let node = currentSelection() {
                 onSelect?(node)
             }
@@ -121,6 +122,12 @@ open class OutlineView: Scroller {
             if targetIndex >= 0 && targetIndex < visibleNodes.count {
                 selectedIndex = targetIndex
                 clampSelectionIntoView()
+                let entry = visibleNodes[targetIndex]
+                let relX = mouseEvent.x - frame.origin.x
+                let indicatorCol = entry.depth * 2
+                if relX <= indicatorCol + 1 {
+                    toggleSelection()
+                }
                 return true
             }
         }
@@ -196,6 +203,17 @@ open class OutlineView: Scroller {
             scrollTo(x: origin.x, y: selectedIndex)
         } else if selectedIndex >= origin.y + frame.size.height {
             scrollTo(x: origin.x, y: selectedIndex - frame.size.height + 1)
+        }
+    }
+
+    private func toggleSelection() {
+        guard selectedIndex >= 0 && selectedIndex < visibleNodes.count else { return }
+        let entry = visibleNodes[selectedIndex]
+        if entry.node.isLeaf { return }
+        if entry.node.expanded {
+            collapseSelection()
+        } else {
+            expandSelection()
         }
     }
 }
