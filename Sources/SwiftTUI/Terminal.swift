@@ -45,12 +45,28 @@ public class Terminal: TerminalProtocol {
         return self.getWindowSize()
     }
 
+    public let capabilities: TerminalCapabilities
+    public private(set) var terminalType: String?
+    public private(set) var hasTrueColor: Bool = false
+
     public init() {
         let defaultSize = Size(width: 80, height: 24)
         let sizeTuple = Terminal.getStaticWindowSize()
         let size = sizeTuple.map { Size(width: $0.width, height: $0.height) } ?? defaultSize
         self.currentBuffer = ScreenBuffer(width: size.width, height: size.height)
         self.previousBuffer = ScreenBuffer(width: size.width, height: size.height)
+        self.capabilities = TerminalCapabilities.load()
+
+        // Detect terminal type from TERM environment variable
+        if let termTypeC = getenv("TERM") {
+            self.terminalType = String(cString: termTypeC)
+            // Simple heuristic for true color support
+            if let term = self.terminalType?.lowercased() {
+                self.hasTrueColor = capabilities.supportsTrueColor || term.contains("256color") || term.contains("xterm-kitty") || term.contains("gnome-terminal")
+            }
+        } else {
+            self.hasTrueColor = capabilities.supportsTrueColor
+        }
     }
 
     /// Switches the terminal to raw mode.
@@ -77,6 +93,7 @@ public class Terminal: TerminalProtocol {
         }
 
         enableMouseTracking()
+        enableEnhancedInputReporting()
     }
 
     /// Restores the terminal to its original (cooked) mode.
@@ -92,18 +109,23 @@ public class Terminal: TerminalProtocol {
         Terminal.originalTerminalAttributes = nil
 
         disableMouseTracking()
+        disableEnhancedInputReporting()
     }
 
     public func enableMouseTracking() {
-        self.write("\u{001B}[?1000h") // Enable X10 mouse tracking
-        self.write("\u{0001B}[?1002h") // Enable button-event tracking (for drag)
-        self.write("\u{001B}[?1006h") // Enable SGR mouse tracking (more detailed, easier to parse)
+        self.write(TerminalControlSequences.enableMouseReporting)
     }
 
     public func disableMouseTracking() {
-        self.write("\u{001B}[?1000l") // Disable X10 mouse tracking
-        self.write("\u{001B}[?1002l") // Disable button-event tracking
-        self.write("\u{001B}[?1006l") // Disable SGR mouse tracking
+        self.write(TerminalControlSequences.disableMouseReporting)
+    }
+
+    private func enableEnhancedInputReporting() {
+        self.write(TerminalControlSequences.enableModifierReporting)
+    }
+
+    private func disableEnhancedInputReporting() {
+        self.write(TerminalControlSequences.disableModifierReporting)
     }
 
     /// Reads a single character from standard input.
@@ -155,78 +177,111 @@ public class Terminal: TerminalProtocol {
         currentBuffer.setCell(x: x, y: y, cell: Cell(character: char, foregroundColor: foreground, backgroundColor: background))
     }
 
+    public func snapshot() -> ScreenSnapshot {
+        return currentBuffer.snapshot()
+    }
+
     /// Renders the current screen buffer to the actual terminal, optimizing by only writing changed cells.
     public func renderBuffer() {
         var outputString = ""
-        var lastFg = ANSIColor.default
-        var lastBg = ANSIColor.default
-        var lastX = -1
-        var lastY = -1
+        var currentFg = ANSIColor.default
+        var currentBg = ANSIColor.default
+        var currentX = -1
+        var currentY = -1
+
+        // Ensure cursor is visible before rendering if it was hidden
+        if isCursorHidden {
+            outputString += ANSI.showCursor
+        }
+
+        var nextPreviousBuffer = previousBuffer
+        let cursorX = cursorPosition.x
+        let cursorY = cursorPosition.y
+        let shouldInvertCursor = !isCursorHidden
 
         for y in 0..<currentBuffer.height {
             for x in 0..<currentBuffer.width {
-                let currentCell = currentBuffer.getCell(x: x, y: y)!
-                let previousCell = previousBuffer.getCell(x: x, y: y)!
-
-                if currentCell != previousCell {
-                    // Move cursor if not adjacent to last written character
-                    if !(x == lastX + 1 && y == lastY && currentCell.foregroundColor == lastFg && currentCell.backgroundColor == lastBg) {
-                        outputString += "\u{001B}[\(y + 1);\(x + 1)H" // Move to 1-based coordinates
-                        // Reset colors if cursor moved
-                        lastFg = .default
-                        lastBg = .default
-                    }
-
-                    // Set foreground color if changed
-                    if currentCell.foregroundColor != lastFg {
-                        outputString += "\u{001B}[\(currentCell.foregroundColor.rawValue)m"
-                        lastFg = currentCell.foregroundColor
-                    }
-                    // Set background color if changed
-                    if currentCell.backgroundColor != lastBg {
-                        outputString += "\u{001B}[\(currentCell.backgroundColor.rawValue)m"
-                        lastBg = currentCell.backgroundColor
-                    }
-
-                    outputString += String(currentCell.character)
-                    lastX = x
-                    lastY = y
+                guard let currentCell = currentBuffer.getCell(x: x, y: y),
+                      let previousCell = previousBuffer.getCell(x: x, y: y) else {
+                    continue
                 }
+
+                var outputCell = currentCell
+                if shouldInvertCursor && x == cursorX && y == cursorY {
+                    outputCell = outputCell.withInvertedColors()
+                }
+
+                if outputCell != previousCell {
+                    // If not adjacent or colors changed, move cursor and set colors
+                    if x != currentX + 1 || y != currentY || outputCell.foregroundColor != currentFg || outputCell.backgroundColor != currentBg {
+                        outputString += ANSI.cursorPosition(row: y + 1, col: x + 1)
+                        
+                        if outputCell.foregroundColor != currentFg {
+                            outputString += ANSI.foregroundColor(outputCell.foregroundColor)
+                            currentFg = outputCell.foregroundColor
+                        }
+                        if outputCell.backgroundColor != currentBg {
+                            outputString += ANSI.backgroundColor(outputCell.backgroundColor)
+                            currentBg = outputCell.backgroundColor
+                        }
+                    }
+                    outputString += String(outputCell.character)
+                    currentX = x
+                    currentY = y
+                }
+                nextPreviousBuffer.setCell(x: x, y: y, cell: outputCell)
             }
         }
-        // Reset colors and move cursor to a safe place after rendering
-        outputString += "\u{001B}[0m" // Reset attributes
-        outputString += "\u{001B}[\(currentBuffer.height + 1);1H" // Move cursor below content
+        // Reset colors and move cursor to its last known position
+        outputString += ANSI.resetAttributes
+        outputString += ANSI.cursorPosition(row: cursorPosition.y + 1, col: cursorPosition.x + 1)
 
         self.write(outputString)
 
         // After rendering, the current buffer becomes the previous buffer for the next frame
-        previousBuffer = currentBuffer
+        previousBuffer = nextPreviousBuffer
         currentBuffer = ScreenBuffer(width: currentBuffer.width, height: currentBuffer.height) // Reset current buffer
     }
 
     /// Clears the terminal screen by filling the current buffer with empty cells.
     public func clearScreen() {
         self.currentBuffer.fill(with: Cell())
+        if let clearSequence = capabilities.clearSequence {
+            self.write(clearSequence)
+        } else {
+            self.write(ANSI.clearScreen)
+        }
     }
 
     /// Moves the cursor to a specific position (row, column).
     /// Rows and columns are 1-based.
     public func moveCursor(to point: Point) {
         cursorPosition = point
-        self.write("\u{001B}[\(point.y + 1);\(point.x + 1)H") // ANSI escape code to move cursor (1-based)
+        if let sequence = capabilities.cursorAddress(row: point.y, column: point.x) {
+            self.write(sequence)
+        } else {
+            self.write(ANSI.cursorPosition(row: point.y + 1, col: point.x + 1))
+        }
     }
 
     /// Hides the cursor.
     public func hideCursor() {
         isCursorHidden = true
-        self.write("\u{001B}[?25l") // ANSI escape code to hide cursor
+        if let hideCursorSequence = capabilities.hideCursorSequence {
+            self.write(hideCursorSequence)
+        } else {
+            self.write(ANSI.hideCursor)
+        }
     }
 
     /// Shows the cursor.
     public func showCursor() {
         isCursorHidden = false
-        self.write("\u{001B}[?25h") // ANSI escape code to show cursor
+        if let showCursorSequence = capabilities.showCursorSequence {
+            self.write(showCursorSequence)
+        } else {
+            self.write(ANSI.showCursor)
+        }
     }
 
     /// Retrieves the current terminal window size.

@@ -29,6 +29,23 @@ open class InputLine: BaseView {
 
     private let historyManager: HistoryManager
 
+    private func finalizeChange(from oldText: String, recordHistory: Bool = true) {
+        if recordHistory && oldText != text {
+            historyManager.push(entry: HistoryEntry(text: text))
+        }
+        validate()
+        setNeedsDisplay()
+    }
+
+    private func insertText(_ newText: String) {
+        guard !newText.isEmpty else { return }
+        let oldText = text
+        let index = text.index(text.startIndex, offsetBy: cursorPosition)
+        text.insert(contentsOf: newText, at: index)
+        cursorPosition += newText.count
+        finalizeChange(from: oldText)
+    }
+
     public init(frame: Rect, text: String = "", validator: Validator? = nil, historyManager: HistoryManager = HistoryManager()) {
         self.text = text
         self.validator = validator
@@ -59,8 +76,9 @@ open class InputLine: BaseView {
     override open func draw(in rect: Rect) {
         super.draw(in: rect)
 
-        let displayX = frame.origin.x
-        let displayY = frame.origin.y
+        let globalOrigin = makeGlobal(point: .zero)
+        let viewRect = Rect(origin: globalOrigin, size: frame.size)
+        guard let drawArea = viewRect.intersection(rect) else { return }
 
         var fgColor: ANSIColor
         var bgColor: ANSIColor
@@ -83,38 +101,46 @@ open class InputLine: BaseView {
 
         let visibleText = String(text.prefix(frame.size.width))
 
-        for (index, char) in visibleText.enumerated() {
-            Application.shared.terminal.writeToBuffer(x: displayX + index, y: displayY, char: char, foreground: fgColor, background: bgColor)
+        for row in 0..<frame.size.height {
+            let globalY = globalOrigin.y + row
+            guard globalY >= drawArea.origin.y && globalY < drawArea.origin.y + drawArea.size.height else { continue }
+            for column in 0..<frame.size.width {
+                let globalX = globalOrigin.x + column
+                guard globalX >= drawArea.origin.x && globalX < drawArea.origin.x + drawArea.size.width else { continue }
+                let char: Character
+                if row == 0 && column < visibleText.count {
+                    let index = visibleText.index(visibleText.startIndex, offsetBy: column)
+                    char = visibleText[index]
+                } else {
+                    char = " "
+                }
+                Application.shared.terminal.writeToBuffer(x: globalX, y: globalY, char: char, foreground: fgColor, background: bgColor)
+            }
         }
 
-        // Fill remaining space with background color
-        for charIndex in visibleText.count..<frame.size.width {
-            Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY, char: " ", foreground: fgColor, background: bgColor)
-        }
-
-        // Draw cursor if focused
         if state.contains(.sfFocused) {
             let cursorChar: Character
             if cursorPosition < text.count {
                 let index = text.index(text.startIndex, offsetBy: cursorPosition)
                 cursorChar = text[index]
             } else {
-                cursorChar = " " // Draw a space if cursor is at the end of the text
+                cursorChar = " "
             }
-            Application.shared.terminal.writeToBuffer(x: displayX + cursorPosition, y: displayY, char: cursorChar, foreground: bgColor, background: fgColor) // Invert colors for cursor
+            let cursorX = globalOrigin.x + cursorPosition
+            let cursorY = globalOrigin.y
+            if drawArea.contains(Point(x: cursorX, y: cursorY)) {
+                Application.shared.terminal.writeToBuffer(x: cursorX, y: cursorY, char: cursorChar, foreground: bgColor, background: fgColor)
+            }
         }
 
-        // Display error message below the input line if invalid
         if !isValid, let message = errorMessage {
-            let errorX = frame.origin.x
-            let errorY = frame.origin.y + frame.size.height
+            let errorY = globalOrigin.y + frame.size.height
             let errorToDisplay = String(message.prefix(frame.size.width))
             for (index, char) in errorToDisplay.enumerated() {
-                Application.shared.terminal.writeToBuffer(x: errorX + index, y: errorY, char: char, foreground: .brightRed, background: .default)
-            }
-            // Clear rest of the line
-            for charIndex in errorToDisplay.count..<frame.size.width {
-                Application.shared.terminal.writeToBuffer(x: errorX + charIndex, y: errorY, char: " ", foreground: .brightRed, background: .default)
+                let globalX = globalOrigin.x + index
+                if drawArea.contains(Point(x: globalX, y: errorY)) {
+                    Application.shared.terminal.writeToBuffer(x: globalX, y: errorY, char: char, foreground: .brightRed, background: .default)
+                }
             }
         }
     }
@@ -177,32 +203,49 @@ open class InputLine: BaseView {
                 // If validation is critical on submit, you might check isValid here
                 handled = true
             default:
-                if let char = keyEvent.character, char.isPrintableASCII {
-                    text.insert(char, at: text.index(text.startIndex, offsetBy: cursorPosition))
-                    cursorPosition += 1
+                if let str = keyEvent.character, let char = str.first, let ascii = char.asciiValue, ascii >= 32 && ascii <= 126 {
+                    let index = text.index(text.startIndex, offsetBy: cursorPosition)
+                    text.insert(contentsOf: str, at: index)
+                    cursorPosition += str.count
                     handled = true
                 }
+                break
             }
         }
 
         if handled {
-            // Only push to history if text actually changed due to user input
-            // This check is important to avoid pushing undo/redo actions themselves
-            if oldTextForHistory != text && !keyEvent.controlKeyState.contains(.control) {
-                historyManager.push(entry: HistoryEntry(text: text))
-            }
-            validate() // Re-validate after text modification
-            setNeedsDisplay() // Request redraw to update cursor/text/validation
+            finalizeChange(from: oldTextForHistory, recordHistory: !keyEvent.controlKeyState.contains(.control))
             return true
         }
         return super.handle(keyEvent: keyEvent)
     }
-}
 
-// Extension to Character to add isPrintableASCII property
-extension Character {
-    var isPrintableASCII: Bool {
-        let asciiValue = self.asciiValue ?? 0
-        return asciiValue >= 32 && asciiValue <= 126
+    override open func handle(command: Command) -> Bool {
+        switch command {
+        case .cmCopy:
+            Application.shared.setClipboardText(text)
+            return true
+        case .cmCut:
+            let oldText = text
+            Application.shared.setClipboardText(text)
+            text = ""
+            cursorPosition = 0
+            finalizeChange(from: oldText)
+            return true
+        case .cmPaste:
+            if let clipboard = Application.shared.clipboardText() {
+                insertText(clipboard)
+                return true
+            }
+        default:
+            break
+        }
+        return super.handle(command: command)
+    }
+
+    override open func handlePaste(_ text: String) -> Bool {
+        guard state.contains(.sfFocused) else { return super.handlePaste(text) }
+        insertText(text)
+        return true
     }
 }

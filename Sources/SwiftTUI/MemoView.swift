@@ -48,6 +48,50 @@ open class MemoView: BaseView {
     }
 
     internal let historyManager: HistoryManager // Changed to internal
+    private func finalizeChange(from oldText: String, recordHistory: Bool = true) {
+        if recordHistory && oldText != text {
+            historyManager.push(entry: HistoryEntry(text: text))
+        }
+        validate()
+        setNeedsDisplay()
+    }
+
+    private func insertText(_ newText: String) {
+        guard !newText.isEmpty, !lines.isEmpty else {
+            if !newText.isEmpty {
+                text = newText
+                cursorPosition = Point(x: lines.last?.count ?? 0, y: lines.count - 1)
+            }
+            return
+        }
+        let oldText = text
+        let lineIndex = cursorPosition.y
+        let currentLine = lines[lineIndex]
+        let insertIndex = currentLine.index(currentLine.startIndex, offsetBy: cursorPosition.x)
+        let prefix = String(currentLine[..<insertIndex])
+        let suffix = String(currentLine[insertIndex...])
+        var newLines = newText.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        if newLines.isEmpty {
+            newLines = [""]
+        }
+        if newLines.count == 1 {
+            lines[lineIndex] = prefix + newLines[0] + suffix
+            cursorPosition.x += newLines[0].count
+        } else {
+            lines[lineIndex] = prefix + newLines[0]
+            var insertPos = lineIndex + 1
+            for middle in newLines.dropFirst().dropLast() {
+                lines.insert(String(middle), at: insertPos)
+                insertPos += 1
+            }
+            let lastLine = newLines.last ?? ""
+            lines.insert(lastLine + suffix, at: insertPos)
+            cursorPosition.y = insertPos
+            cursorPosition.x = lastLine.count
+        }
+        text = lines.joined(separator: "\n")
+        finalizeChange(from: oldText)
+    }
 
     public init(frame: Rect, text: String = "", validator: Validator? = nil, historyManager: HistoryManager = HistoryManager()) {
         self.text = text
@@ -134,8 +178,9 @@ open class MemoView: BaseView {
 
         let visibleHeight = frame.size.height
         let visibleWidth = frame.size.width
-        let displayX = frame.origin.x
-        let displayY = frame.origin.y
+        let globalOrigin = makeGlobal(point: .zero)
+        let viewRect = Rect(origin: globalOrigin, size: frame.size)
+        guard let drawArea = viewRect.intersection(rect) else { return }
 
         var fgColor: ANSIColor
         var bgColor: ANSIColor
@@ -157,6 +202,8 @@ open class MemoView: BaseView {
         }
 
         for i in 0..<visibleHeight {
+            let globalY = globalOrigin.y + i
+            guard globalY >= drawArea.origin.y && globalY < drawArea.origin.y + drawArea.size.height else { continue }
             let lineIndex = scrollOffset.y + i
             if lineIndex >= 0 && lineIndex < lines.count {
                 var line = lines[lineIndex]
@@ -165,55 +212,56 @@ open class MemoView: BaseView {
                     let endIndex = line.index(startIndex, offsetBy: min(visibleWidth, line.count - scrollOffset.x))
                     line = String(line[startIndex..<endIndex])
                 } else {
-                    line = "" // Line is scrolled past horizontally
+                    line = ""
                 }
 
                 for (charIndex, char) in line.enumerated() {
-                    Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: char, foreground: fgColor, background: bgColor)
+                    let globalX = globalOrigin.x + charIndex
+                    if drawArea.contains(Point(x: globalX, y: globalY)) {
+                        Application.shared.terminal.writeToBuffer(x: globalX, y: globalY, char: char, foreground: fgColor, background: bgColor)
+                    }
                 }
-                // Fill remaining space with background color
                 for charIndex in line.count..<visibleWidth {
-                    Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: " ", foreground: fgColor, background: bgColor)
+                    let globalX = globalOrigin.x + charIndex
+                    if drawArea.contains(Point(x: globalX, y: globalY)) {
+                        Application.shared.terminal.writeToBuffer(x: globalX, y: globalY, char: " ", foreground: fgColor, background: bgColor)
+                    }
                 }
             } else {
-                // Draw empty line
                 for charIndex in 0..<visibleWidth {
-                    Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY + i, char: " ", foreground: fgColor, background: bgColor)
+                    let globalX = globalOrigin.x + charIndex
+                    if drawArea.contains(Point(x: globalX, y: globalY)) {
+                        Application.shared.terminal.writeToBuffer(x: globalX, y: globalY, char: " ", foreground: fgColor, background: bgColor)
+                    }
                 }
             }
         }
 
-        // Draw cursor if focused
         if state.contains(.sfFocused) {
-            let cursorGlobalX = displayX + cursorPosition.x - scrollOffset.x
-            let cursorGlobalY = displayY + cursorPosition.y - scrollOffset.y
+            let cursorGlobalX = globalOrigin.x + cursorPosition.x - scrollOffset.x
+            let cursorGlobalY = globalOrigin.y + cursorPosition.y - scrollOffset.y
 
-            if cursorGlobalX >= displayX && cursorGlobalX < displayX + visibleWidth &&
-               cursorGlobalY >= displayY && cursorGlobalY < displayY + visibleHeight {
-
+            if drawArea.contains(Point(x: cursorGlobalX, y: cursorGlobalY)) {
                 let cursorChar: Character
                 if cursorPosition.y < lines.count && cursorPosition.x < lines[cursorPosition.y].count {
                     let line = lines[cursorPosition.y]
                     let index = line.index(line.startIndex, offsetBy: cursorPosition.x)
                     cursorChar = line[index]
                 } else {
-                    cursorChar = " " // Draw a space if cursor is at the end of a line or new line
+                    cursorChar = " "
                 }
-                Application.shared.terminal.writeToBuffer(x: cursorGlobalX, y: cursorGlobalY, char: cursorChar, foreground: bgColor, background: fgColor) // Invert colors for cursor
+                Application.shared.terminal.writeToBuffer(x: cursorGlobalX, y: cursorGlobalY, char: cursorChar, foreground: bgColor, background: fgColor)
             }
         }
 
-        // Display error message below the memo view if invalid
         if !isValid, let message = errorMessage {
-            let errorX = frame.origin.x
-            let errorY = frame.origin.y + frame.size.height
+            let errorY = globalOrigin.y + frame.size.height
             let errorToDisplay = String(message.prefix(frame.size.width))
             for (index, char) in errorToDisplay.enumerated() {
-                Application.shared.terminal.writeToBuffer(x: errorX + index, y: errorY, char: char, foreground: .brightRed, background: .default)
-            }
-            // Clear rest of the line
-            for charIndex in errorToDisplay.count..<frame.size.width {
-                Application.shared.terminal.writeToBuffer(x: errorX + charIndex, y: errorY, char: " ", foreground: .brightRed, background: .default)
+                let globalX = globalOrigin.x + index
+                if drawArea.contains(Point(x: globalX, y: errorY)) {
+                    Application.shared.terminal.writeToBuffer(x: globalX, y: errorY, char: char, foreground: .brightRed, background: .default)
+                }
             }
         }
     }
@@ -333,28 +381,54 @@ open class MemoView: BaseView {
                 cursorPosition.x = 0
                 handled = true
             default:
-                if let char = keyEvent.character, char.isPrintableASCII {
+                if let str = keyEvent.character, let char = str.first, let ascii = char.asciiValue, ascii >= 32 && ascii <= 126 {
                     let lineIndex = cursorPosition.y
                     var currentLine = lines[lineIndex]
-                    currentLine.insert(char, at: currentLine.index(currentLine.startIndex, offsetBy: cursorPosition.x))
+                    currentLine.insert(contentsOf: str, at: currentLine.index(currentLine.startIndex, offsetBy: cursorPosition.x))
                     lines[lineIndex] = currentLine
                     text = lines.joined(separator: "\n") // Update text to trigger didSet
-                    cursorPosition.x += 1
+                    cursorPosition.x += str.count
                     handled = true
                 }
             }
         }
 
         if handled {
-            // Only push to history if text actually changed due to user input
-            // This check is important to avoid pushing undo/redo actions themselves
-            if oldTextForHistory != text && !keyEvent.controlKeyState.contains(.control) {
-                historyManager.push(entry: HistoryEntry(text: text))
-            }
-            validate() // Re-validate after text modification
-            setNeedsDisplay()
+            finalizeChange(from: oldTextForHistory, recordHistory: !keyEvent.controlKeyState.contains(.control))
             return true
         }
         return super.handle(keyEvent: keyEvent)
+    }
+
+    override open func handle(command: Command) -> Bool {
+        switch command {
+        case .cmCopy:
+            Application.shared.setClipboardText(text)
+            return true
+        case .cmCut:
+            let oldText = text
+            Application.shared.setClipboardText(text)
+            text = ""
+            lines = [""]
+            cursorPosition = .zero
+            finalizeChange(from: oldText)
+            return true
+        case .cmPaste:
+            if let clipboard = Application.shared.clipboardText() {
+                if lines.isEmpty { lines = [""] }
+                insertText(clipboard)
+                return true
+            }
+        default:
+            break
+        }
+        return super.handle(command: command)
+    }
+
+    override open func handlePaste(_ text: String) -> Bool {
+        guard state.contains(.sfFocused) else { return super.handlePaste(text) }
+        if lines.isEmpty { lines = [""] }
+        insertText(text)
+        return true
     }
 }

@@ -1,53 +1,59 @@
 import Foundation
+import NIO
+import NIOExtras
 
-// The Swift Programming Language
-// https://docs.swift.org/swift-book
+#if os(Linux)
+import Glibc
+#else
+import Darwin.C
+#endif
 
-/// A protocol that all UI elements (views) must conform to.
-/// This defines the basic interface for drawing and handling events.
+// A protocol that all UI elements (views) must conform to.
+// This defines the basic interface for drawing and handling events.
 @MainActor public protocol View: AnyObject { // AnyObject to allow weak references for 'owner'
-    /// The parent view in the hierarchy.
+    // The parent view in the hierarchy.
     var owner: View? { get set }
 
-    /// Draws the view on the given canvas.
+    // Draws the view on the given canvas.
     func draw(in rect: Rect)
 
-    /// Handles a keyboard event. Returns true if the event was handled.
+    // Handles a keyboard event. Returns true if the event was handled.
     func handle(keyEvent: KeyEvent) -> Bool
 
-    /// Handles a mouse event. Returns true if the event was handled.
+    // Handles a mouse event. Returns true if the event was handled.
     func handle(mouseEvent: MouseEvent) -> Bool
 
-    /// Handles a command. Returns true if the command was handled.
+    // Handles a command. Returns true if the command was handled.
     func handle(command: Command) -> Bool
 
-    /// The frame of the view relative to its superview.
+    // The frame of the view relative to its superview.
     var frame: Rect { get set }
 
-    /// The subviews contained within this view.
+    // The subviews contained within this view.
     var subviews: [View] { get }
 
-    /// Adds a subview to this view.
+    // Adds a subview to this view.
     func add(subview: View)
 
-    /// Converts a point from the view's local coordinate system to the global screen coordinate system.
+    // Converts a point from the view's local coordinate system to the global screen coordinate system.
     func makeGlobal(point: Point) -> Point
 
-    /// Converts a point from the global screen coordinate system to the view's local coordinate system.
+    // Converts a point from the global screen coordinate system to the view's local coordinate system.
     func makeLocal(point: Point) -> Point
 
-    /// The current state of the view (e.g., visible, focused).
+    // The current state of the view (e.g., visible, focused).
     var state: ViewState { get set }
 
-    /// Options for the view's behavior (e.g., selectable).
+    // Options for the view's behavior (e.g., selectable).
     var options: ViewOptions { get set }
 
-    /// The mask of events this view is interested in.
+    // The mask of events this view is interested in.
     var eventMask: EventMask { get set }
 
-    /// Sets or unsets a specific state for the view.
+    // Sets or unsets a specific state for the view.
     func setState(_ aState: ViewState, enable: Bool)
-    func setNeedsDisplay()
+    func setNeedsDisplay(_ rect: Rect?)
+    func handlePaste(_ text: String) -> Bool
 }
 
 public extension View {
@@ -80,17 +86,23 @@ public extension View {
         }
     }
 
-    func setNeedsDisplay() {
-        // Default implementation: Invalidate the view's area,
-        // which will eventually lead to a redraw by the application.
-        // For now, we'll just print a message.
-        print("  View \(type(of: self)) at \(frame) needs display.")
-        // In a real implementation, this would typically involve
-        // adding the view to a dirty rect list in the Application.
+    func setNeedsDisplay(_ rect: Rect? = nil) {
+        let localRect = rect ?? Rect(origin: .zero, size: frame.size)
+        let globalOrigin = makeGlobal(point: localRect.origin)
+        let globalRect = Rect(origin: globalOrigin, size: localRect.size)
+        Application.shared.setNeedsDisplay(globalRect)
+    }
+
+    func handlePaste(_ text: String) -> Bool {
+        return owner?.handlePaste(text) ?? false
+    }
+
+    func globalFrame() -> Rect {
+        return Rect(origin: makeGlobal(point: .zero), size: frame.size)
     }
 }
 
-/// A basic implementation of a rectangular area on the screen.
+// A basic implementation of a rectangular area on the screen.
 public struct Rect: Equatable {
     public var origin: Point
     public var size: Size
@@ -114,9 +126,26 @@ public struct Rect: Equatable {
         return point.x >= x && point.x < x + width &&
                point.y >= y && point.y < y + height
     }
+
+    public func union(_ other: Rect) -> Rect {
+        let minX = min(self.x, other.x)
+        let minY = min(self.y, other.y)
+        let maxX = max(self.x + self.width, other.x + other.width)
+        let maxY = max(self.y + self.height, other.y + other.height)
+        return Rect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    public func intersection(_ other: Rect) -> Rect? {
+        let newX = max(self.x, other.x)
+        let newY = max(self.y, other.y)
+        let newWidth = min(self.x + self.width, other.x + other.width) - newX
+        let newHeight = min(self.y + self.height, other.y + other.height) - newY
+        if newWidth <= 0 || newHeight <= 0 { return nil }
+        return Rect(x: newX, y: newY, width: newWidth, height: newHeight)
+    }
 }
 
-/// A basic implementation of a point on the screen.
+// A basic implementation of a point on the screen.
 public struct Point: Equatable, Comparable {
     public var x: Int
     public var y: Int
@@ -154,7 +183,7 @@ public struct Point: Equatable, Comparable {
     }
 }
 
-/// A basic implementation of a size (width and height).
+// A basic implementation of a size (width and height).
 public struct Size: Equatable {
     public var width: Int
     public var height: Int
@@ -167,7 +196,7 @@ public struct Size: Equatable {
     @MainActor public static let zero = Size(width: 0, height: 0)
 }
 
-/// Represents the state of control keys (Shift, Ctrl, Alt).
+// Represents the state of control keys (Shift, Ctrl, Alt).
 public struct ControlKeyState: OptionSet, Sendable {
     public let rawValue: UInt8
 
@@ -180,77 +209,145 @@ public struct ControlKeyState: OptionSet, Sendable {
     public static let alt = ControlKeyState(rawValue: 1 << 2)
 }
 
-/// Defines the type of mouse event.
-public enum EventType: UInt8 {
+// Defines the type of mouse event.
+
+public enum EventType: UInt8, Sendable {
+
     case mouseUp
+
     case mouseDown
+
     case mouseDrag
+
     case mouseMove
+
     case mouseWheel
+
     case mouseDoubleClick
+
     case mouseTripleClick
+
     case mouseQuadrupleClick
+
     case mouseNone
+
 }
 
-/// Represents a mouse event.
-public struct MouseEvent {
+// Represents a mouse event.
+
+public struct MouseEvent: Sendable {
+
     public let x: Int
+
     public let y: Int
+
     public let eventType: EventType
+
     public let controlKeyState: ControlKeyState
+
+
 
     public var position: Point {
+
         return Point(x: x, y: y)
+
     }
+
 }
 
-/// Represents a keyboard event.
-public struct KeyEvent {
-    public let character: Character?
+
+
+// Represents a keyboard event.
+
+public struct KeyEvent: Sendable {
+
+    public let character: String?
+
     public let keyCode: Int
+
     public let controlKeyState: ControlKeyState
 
+
+
     // Define common key codes as static properties
+
     public struct KeyCode {
+
         public static let leftArrow = 1000 // Arbitrary values, should be mapped to actual terminal codes
+
         public static let rightArrow = 1001
+
         public static let upArrow = 1002
+
         public static let downArrow = 1003
+
         public static let home = 1004
+
         public static let end = 1005
+
         public static let pageUp = 1006
+
         public static let pageDown = 1007
+
         public static let insert = 1008
+
         public static let delete = 1009
+
         public static let backspace = 8 // ASCII Backspace
+
         public static let tab = 9     // ASCII Tab
+
         public static let enter = 13  // ASCII Carriage Return (Enter)
+
         public static let escape = 27 // ASCII Escape
+
         public static let f1 = 1010
+
         public static let f2 = 1011
+
         public static let f3 = 1012
+
         public static let f4 = 1013
+
         public static let f5 = 1014
+
         public static let f6 = 1015
+
         public static let f7 = 1016
+
         public static let f8 = 1017
+
         public static let f9 = 1018
+
         public static let f10 = 1019
+
         public static let f11 = 1020
+
         public static let f12 = 1021
+
     }
+
 }
 
-/// Represents a generic event that can be handled by views.
-public enum Event {
+
+
+// Represents a generic event that can be handled by views.
+
+public enum Event: Sendable {
+
     case key(KeyEvent)
+
     case mouse(MouseEvent)
+
     case command(Command)
+
+    case paste(String)
+
     case none // Represents no event
+
 }
 
-/// OptionSet for event masks.
+// OptionSet for event masks.
 public struct EventMask: OptionSet, Sendable {
     public let rawValue: UInt
     public init(rawValue: UInt) { self.rawValue = rawValue }
@@ -262,45 +359,67 @@ public struct EventMask: OptionSet, Sendable {
     // Add more event types as needed
 }
 
-/// Represents a command that can be dispatched and handled.
-public enum Command: UInt, CaseIterable {
+// Represents a command that can be dispatched and handled.
+
+public enum Command: UInt, CaseIterable, Sendable {
+
     case cmNone = 0
+
     case cmQuit
+
     case cmAbout
+
     case cmCut
+
     case cmCopy
+
     case cmPaste
+
     case cmUndo
+
     case cmRedo
+
     case cmSave
+
     case cmOpen
+
     case cmNew
+
     case cmClose
+
     case cmCascade
+
     case cmTile
+
     case cmZoom
+
     case cmNext
+
     case cmPrev
+
     case cmDosShell // For compatibility with original Tvision
+
     case cmUser // User-defined command base
+
     // Add more commands as needed
+
 }
 
-/// Represents the result of a validation operation.
+// Represents the result of a validation operation.
 public enum ValidationResult: Equatable, Sendable {
     case valid
     case invalid(String) // Associated value for error message
 }
 
-/// Type alias for a validation closure.
+// Type alias for a validation closure.
 public typealias Validator = (String) -> ValidationResult
 
-/// Represents a single entry in the history stack.
+// Represents a single entry in the history stack.
 public struct HistoryEntry: Equatable, Sendable {
     public let text: String
 }
 
-/// Manages a history stack for undo/redo operations.
+// Manages a history stack for undo/redo operations.
 public class HistoryManager {
     private var history: [HistoryEntry] = []
     private var currentIndex: Int = -1
@@ -350,7 +469,7 @@ public class HistoryManager {
     }
 }
 
-/// OptionSet for view states.
+// OptionSet for view states.
 public struct ViewState: OptionSet, Sendable {
     public let rawValue: UInt
     public init(rawValue: UInt) { self.rawValue = rawValue }
@@ -368,7 +487,7 @@ public struct ViewState: OptionSet, Sendable {
     // Add more states as needed
 }
 
-/// OptionSet for view options.
+// OptionSet for view options.
 public struct ViewOptions: OptionSet, Sendable {
     public let rawValue: UInt
     public init(rawValue: UInt) { self.rawValue = rawValue }
@@ -381,7 +500,7 @@ public struct ViewOptions: OptionSet, Sendable {
     // Add more options as needed
 }
 
-/// A base class providing default implementations for the View protocol.
+// A base class providing default implementations for the View protocol.
 @MainActor
 open class BaseView: View {
     public weak var owner: View?
@@ -396,20 +515,21 @@ open class BaseView: View {
     }
 
     open func draw(in rect: Rect) {
-        let defaultColors = Application.currentColorTheme.currentPalette[.desktop] // Use desktop colors as default background
+        guard let drawArea = globalFrame().intersection(rect) else { return }
+        let defaultColors = Application.currentColorTheme.currentPalette[.desktop]
+        let startY = drawArea.origin.y
+        let endY = drawArea.origin.y + drawArea.size.height
+        let startX = drawArea.origin.x
+        let endX = drawArea.origin.x + drawArea.size.width
 
-        // Default drawing: fill the view's frame with empty cells
-        for y in frame.origin.y..<(frame.origin.y + frame.size.height) {
-            for x in frame.origin.x..<(frame.origin.x + frame.size.width) {
+        for y in startY..<endY {
+            for x in startX..<endX {
                 Application.shared.terminal.writeToBuffer(x: x, y: y, char: " ", foreground: defaultColors.foreground, background: defaultColors.background)
             }
         }
 
-        // Draw subviews
-        for subview in subviews {
-            if subview.state.contains(.sfVisible) {
-                subview.draw(in: rect)
-            }
+        for subview in subviews where subview.state.contains(.sfVisible) {
+            subview.draw(in: rect)
         }
     }
 
@@ -450,6 +570,15 @@ open class BaseView: View {
         return owner?.handle(command: command) ?? false
     }
 
+    open func handlePaste(_ text: String) -> Bool {
+        for subview in subviews.reversed() {
+            if subview.handlePaste(text) {
+                return true
+            }
+        }
+        return owner?.handlePaste(text) ?? false
+    }
+
     public func add(subview: View) {
         subview.owner = self
         subviews.append(subview)
@@ -465,8 +594,8 @@ open class BaseView: View {
     }
 }
 
-/// The main application class for the Text UI Toolkit.
-/// Manages the main event loop and the root view.
+// The main application class for the Text UI Toolkit.
+// Manages the main event loop and the root view.
 @MainActor
 public class Application {
     public private(set) var rootView: View?
@@ -475,16 +604,52 @@ public class Application {
     public static var currentColorTheme: ColorTheme = .default
     
     public let terminal: TerminalProtocol // Dependency injection for Terminal
+    private var pendingDirtyRects: [Rect] = []
+    private var clipboardStorage: String = ""
+
+    // NIO components
+    private let eventLoopGroup: EventLoopGroup
+    private var channel: Channel?
+    
+    // Shutdown synchronization
+    private let shutdownGroup = DispatchGroup()
+    private var signalSources: [DispatchSourceSignal] = []
 
     // Static shared instance for easy access
     public static var shared: Application!
 
     public init(terminal: TerminalProtocol = Terminal()) {
         self.terminal = terminal
+        self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         Application.shared = self // Set the shared instance
+        // Enter the DispatchGroup when the application starts.
+        // We will leave it when shutdown is complete.
+        shutdownGroup.enter()
     }
 
-    /// Sets the root view of the application.
+    private func setupSignalHandlers() {
+        let signalQueue = DispatchQueue(label: "com.swifttui.signalhandler")
+        
+        [SIGTERM, SIGINT].forEach { sig in
+            let signalSource = DispatchSource.makeSignalSource(signal: sig, queue: signalQueue)
+            signalSource.setEventHandler {
+                print("Caught signal \(sig), initiating shutdown...")
+                Task {
+                    await self.stop()
+                }
+            }
+            signalSource.resume()
+            self.signalSources.append(signalSource)
+        }
+    }
+
+    private func cleanupTerminal() {
+        try? terminal.disableRawMode()
+        terminal.showCursor()
+        terminal.clearScreen()
+    }
+
+    // Sets the root view of the application.
     public func setRootView(_ view: View) {
         self.rootView = view
 
@@ -498,89 +663,108 @@ public class Application {
         }
     }
 
-    /// Starts the application's main event loop.
+    // Starts the application's main event loop.
     public func run() {
-        guard let rootView = rootView else {
+        defer {
+            cleanupTerminal()
+            print("Application stopped.")
+        }
+
+        guard self.rootView != nil else {
             print("Error: No root view set for the application.")
+            shutdownGroup.leave()
             return
         }
 
         do {
             try terminal.enableRawMode()
             terminal.hideCursor()
-            defer { // Ensure raw mode is disabled and cursor is shown on exit
-                try? terminal.disableRawMode()
-                terminal.showCursor()
-                terminal.clearScreen() // Clear screen on exit
-            }
+            setupSignalHandlers()
 
+            let bootstrap = NIOPipeBootstrap(group: eventLoopGroup)
+                .channelInitializer { channel in
+                    channel.pipeline.addHandler(TerminalInputHandler(application: self))
+                }
+
+            channel = try bootstrap.takingOwnershipOfDescriptor(input: STDIN_FILENO).wait()
+            
             isRunning = true
-            print("Application started. Press 'q' to quit.")
+            print("Application started. Press Ctrl-Q or use the menu to quit.")
+            self.redraw()
 
-            var escapeSequenceBuffer: [UInt8] = []
+            // Wait here until stop() is called and shutdown completes.
+            shutdownGroup.wait()
 
-            while isRunning {
-                // 1. Process Events
-                if let byte = terminal.readCharacter() {
-                    if byte == 0x1B { // ESC character
-                        escapeSequenceBuffer.append(byte)
-                    } else if !escapeSequenceBuffer.isEmpty {
-                        escapeSequenceBuffer.append(byte)
-                        // Attempt to parse the escape sequence
-                        if let event = parseEscapeSequence(escapeSequenceBuffer) {
-                            post(event: event)
-                            escapeSequenceBuffer.removeAll()
-                        } else if escapeSequenceBuffer.count > 5 { // Max reasonable escape sequence length
-                            // If it's too long and not recognized, treat as regular input or error
-                            print("  Unrecognized escape sequence: \(escapeSequenceBuffer)")
-                            escapeSequenceBuffer.removeAll()
-                        }
-                    } else {
-                        // Regular character input
-                        let char = Character(UnicodeScalar(byte))
-                        let keyEvent = KeyEvent(character: char, keyCode: Int(byte), controlKeyState: [])
-                        post(event: .key(keyEvent))
-                    }
-                }
-
-                if let event = _getNextEvent() {
-                    _handle(event: event)
-                }
-
-                // 2. Draw
-                rootView.draw(in: Rect(x: 0, y: 0, width: terminal.windowSize.width, height: terminal.windowSize.height)) // Draw the entire root view
-                terminal.renderBuffer() // Render the buffer to the actual terminal
-
-                // Small delay to prevent busy-waiting in a real loop
-                // With VTIME=1, readCharacter already provides a small delay/timeout.
-                // Thread.sleep(forTimeInterval: 0.01) // Reduced delay for responsiveness
-            }
-            print("Application stopped.")
         } catch {
-            print("Terminal Error: \(error)")
+            print("Error: \(error)")
+            shutdownGroup.leave() // Ensure we leave the group on error
         }
     }
 
-    /// Stops the application's main event loop.
-    public func stop() {
+    // Stops the application's main event loop.
+    public func stop() async {
+        guard isRunning else { 
+            // If stop is called when not running, ensure we leave the group.
+            if isRunning == false {
+                shutdownGroup.leave()
+            }
+            return 
+        }
+        print("Stopping application...")
         isRunning = false
-    }
+        
+        // Close the channel, which will eventually stop the input handler
+        try? await channel?.close()
 
-    /// Adds an event to the event queue.
-    public func post(event: Event) {
-        eventQueue.append(event)
-    }
-
-    /// Retrieves the next event from the queue.
-    internal func _getNextEvent() -> Event? {
-        if eventQueue.isEmpty {
-            // In a real app, this would block and wait for input
-            return nil
+        // Shut down the event loop group
+        do {
+            try await eventLoopGroup.shutdownGracefully()
+        } catch {
+            print("Error shutting down event loop group: \(error)")
         }
+        
+        // Leave the group to unblock the main thread
+        shutdownGroup.leave()
+    }
+
+    // Adds an event to the event queue.
+    public func post(event: Event) async {
+        await MainActor.run {
+            self.eventQueue.append(event)
+            self.processEvents()
+        }
+    }
+
+    private func processEvents() {
+        while let event = _getNextEvent() {
+            _handle(event: event)
+        }
+        // After handling a batch of events, redraw the screen.
+        self.redraw()
+    }
+
+    private func redraw() {
+        guard let rootView = rootView else { return }
+        let fullRect = Rect(x: 0, y: 0, width: terminal.windowSize.width, height: terminal.windowSize.height)
+        let rects = pendingDirtyRects.isEmpty ? [fullRect] : pendingDirtyRects
+        pendingDirtyRects.removeAll()
+        for dirtyRect in rects {
+            rootView.draw(in: dirtyRect)
+        }
+        terminal.renderBuffer()
+    }
+
+    func setNeedsDisplay(_ rect: Rect) {
+        pendingDirtyRects.append(rect)
+    }
+
+    // Retrieves the next event from the queue.
+    internal func _getNextEvent() -> Event? {
+        guard !eventQueue.isEmpty else { return nil }
         return eventQueue.removeFirst()
     }
 
-    /// Dispatches an event to the root view.
+    // Dispatches an event to the root view.
     internal func _handle(event: Event) {
         guard let rootView = rootView else { return }
 
@@ -590,97 +774,63 @@ public class Application {
         case .mouse(let mouseEvent):
             _ = rootView.handle(mouseEvent: mouseEvent)
         case .command(let command):
+            if command == .cmQuit {
+                Task { await self.stop() }
+            }
             _ = rootView.handle(command: command)
+        case .paste(let text):
+            self.handlePaste(text: text)
         case .none:
             break
         }
     }
 
-    private func parseEscapeSequence(_ sequence: [UInt8]) -> Event? {
-        // Common ANSI escape sequences for special keys
-        // CSI (Control Sequence Introducer) is ESC [ (0x1B 0x5B)
-
-        if sequence.count >= 3 && sequence[0] == 0x1B && sequence[1] == 0x5B { // ESC [
-            // Mouse events in SGR mode: ESC [ < C ; X ; Y (M or m)
-            if sequence.count >= 6 && sequence[2] == 0x3C { // Starts with ESC [ <
-                if let sequenceString = String(bytes: sequence, encoding: .ascii) {
-                    let regex = try? NSRegularExpression(pattern: "\u{001B}\\[<(\\d+);(\\d+);(\\d+)([Mm])")
-                    if let match = regex?.firstMatch(in: sequenceString, options: [], range: NSRange(location: 0, length: sequenceString.utf16.count)) {
-                        if let buttonRange = Range(match.range(at: 1), in: sequenceString),
-                           let xRange = Range(match.range(at: 2), in: sequenceString),
-                           let yRange = Range(match.range(at: 3), in: sequenceString),
-                           let typeRange = Range(match.range(at: 4), in: sequenceString),
-                           let buttonCode = Int(sequenceString[buttonRange]),
-                           let x = Int(sequenceString[xRange]),
-                           let y = Int(sequenceString[yRange]) {
-
-                            let eventTypeChar = sequenceString[typeRange]
-                            var eventType: EventType = .mouseNone
-                            var controlKeyState: ControlKeyState = []
-
-                            // Button codes: 0=Left, 1=Middle, 2=Right, 32=ScrollUp, 33=ScrollDown
-                            // Add 4 for Shift, 8 for Alt, 16 for Ctrl
-                            let actualButton = buttonCode & 0b11 // Mask for actual button (0,1,2)
-                            let shiftPressed = (buttonCode & 0b100) != 0
-                            let altPressed = (buttonCode & 0b1000) != 0
-                            let ctrlPressed = (buttonCode & 0b10000) != 0
-
-                            if shiftPressed { controlKeyState.insert(.shift) }
-                            if altPressed { controlKeyState.insert(.alt) }
-                            if ctrlPressed { controlKeyState.insert(.control) }
-
-                            if eventTypeChar == "M" { // Mouse down or drag
-                                if actualButton == 0 { eventType = .mouseDown }
-                                else if actualButton == 1 { eventType = .mouseDown } // Middle
-                                else if actualButton == 2 { eventType = .mouseDown } // Right
-                                else if actualButton == 32 { eventType = .mouseWheel } // Scroll Up
-                                else if actualButton == 33 { eventType = .mouseWheel } // Scroll Down
-                                // Need to differentiate drag from down. SGR mode reports drag as M with button held.
-                                // For now, treat all M as mouseDown, will refine later.
-                            } else if eventTypeChar == "m" { // Mouse up
-                                if actualButton == 0 { eventType = .mouseUp }
-                                else if actualButton == 1 { eventType = .mouseUp } // Middle
-                                else if actualButton == 2 { eventType = .mouseUp } // Right
-                            }
-
-                            return .mouse(MouseEvent(x: x - 1, y: y - 1, eventType: eventType, controlKeyState: controlKeyState)) // Convert to 0-based
-                        }
-                    }
-                }
-            }
-
-            // Existing keyboard escape sequences
-            switch sequence[2] {
-            case 0x41: return .key(KeyEvent(character: nil, keyCode: KeyEvent.KeyCode.upArrow, controlKeyState: [])) // Up Arrow
-            case 0x42: return .key(KeyEvent(character: nil, keyCode: KeyEvent.KeyCode.downArrow, controlKeyState: [])) // Down Arrow
-            case 0x43: return .key(KeyEvent(character: nil, keyCode: KeyEvent.KeyCode.rightArrow, controlKeyState: [])) // Right Arrow
-            case 0x44: return .key(KeyEvent(character: nil, keyCode: KeyEvent.KeyCode.leftArrow, controlKeyState: [])) // Left Arrow
-            case 0x31: // Home, End, Insert, Delete, PageUp, PageDown often start with ESC [ 1 ~ or ESC [ 1 ; X ~
-                if sequence.count >= 4 && sequence[3] == 0x7E { // ESC [ 1 ~ (Home)
-                    return .key(KeyEvent(character: nil, keyCode: KeyEvent.KeyCode.home, controlKeyState: []))
-                }
-            case 0x34: // End (ESC [ 4 ~)
-                if sequence.count >= 4 && sequence[3] == 0x7E {
-                    return .key(KeyEvent(character: nil, keyCode: KeyEvent.KeyCode.end, controlKeyState: []))
-                }
-            case 0x33: // Delete (ESC [ 3 ~)
-                if sequence.count >= 4 && sequence[3] == 0x7E {
-                    return .key(KeyEvent(character: nil, keyCode: KeyEvent.KeyCode.delete, controlKeyState: []))
-                }
-            case 0x35: // Page Up (ESC [ 5 ~)
-                if sequence.count >= 4 && sequence[3] == 0x7E {
-                    return .key(KeyEvent(character: nil, keyCode: KeyEvent.KeyCode.pageUp, controlKeyState: []))
-                }
-            case 0x36: // Page Down (ESC [ 6 ~)
-                if sequence.count >= 4 && sequence[3] == 0x7E {
-                    return .key(KeyEvent(character: nil, keyCode: KeyEvent.KeyCode.pageDown, controlKeyState: []))
-                }
-            default:
-                break
+    private func handlePaste(text: String) {
+        guard let rootView = rootView else { return }
+        setClipboardText(text)
+        if !rootView.handlePaste(text) {
+            for scalar in text.unicodeScalars {
+                let keyEvent = KeyEvent(character: String(scalar), keyCode: Int(scalar.value), controlKeyState: [])
+                _ = rootView.handle(keyEvent: keyEvent)
             }
         }
-        // Add more escape sequence parsing for F-keys, etc.
+    }
 
-        return nil // Not a recognized escape sequence
+    func setClipboardText(_ text: String) {
+        clipboardStorage = text
+        // TODO: send OSC 52 / far2l requests when outbound channel is ready.
+    }
+
+    func clipboardText() -> String? {
+        return clipboardStorage
+    }
+}
+
+// Private NIO Channel Handler for processing terminal input
+private final class TerminalInputHandler: ChannelInboundHandler, @unchecked Sendable {
+    public typealias InboundIn = ByteBuffer
+    private weak var application: Application?
+    private let parser = TerminalInputParser()
+
+    init(application: Application) {
+        self.application = application
+    }
+
+    public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        var buffer = self.unwrapInboundIn(data)
+        guard let application = self.application else { return }
+
+        while let byte = buffer.readInteger(as: UInt8.self) {
+            let events = parser.feed(byte: byte)
+            for event in events {
+                Task { await application.post(event: event) }
+            }
+        }
+    }
+
+    public func errorCaught(context: ChannelHandlerContext, error: Error) {
+        print("TerminalInputHandler error: \(error)")
+        context.close(promise: nil)
+        Task { await application?.stop() }
     }
 }

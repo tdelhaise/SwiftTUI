@@ -226,6 +226,22 @@ func main() {
 
 **Note on `Application.run()`:** The current `Application.run()` method is a blocking loop that simulates event processing and drawing. In a real terminal UI application, this would involve integrating with a low-level terminal library (like ncurses or termbox) to capture actual user input and render output. The `Thread.sleep` and `readLine()` calls are placeholders for such an integration.
 
+## 5. Clipboard and Paste Handling
+
+SwiftTUI translates terminal clipboard notifications (far2l `_far2l:…ESC\` messages and OSC 52 `]52;;…BEL`) into `Event.paste(String)` so the currently focused view can consume the pasted text atomically before it is replayed as keystrokes. `Application` stores the last clipboard payload in memory and exposes it through `setClipboardText(_:)`/`clipboardText()`, allowing widgets to implement `cmCopy`/`cmCut`/`cmPaste` locally.
+
+`InputLine` and `MemoView` override `handle(command:)` and `handlePaste(_:)` to hook those commands into their undo stack and validation logic. Custom views can opt into the same behavior by overriding `handlePaste(_:)` (returning `true` to consume the paste) and/or responding to the relevant `Command` values.
+
+## 6. Screen Capture & Testing Hooks
+
+The screen buffer infrastructure now exposes capture utilities that make automated rendering tests and developer tooling easier:
+
+- `Terminal.snapshot()` returns a `ScreenSnapshot` describing every cell, which you can turn into ASCII via `asciiRepresentation()` or diff against another snapshot.
+- `ScreenBuffer` can track changed cells (for damage-based redraws) and produce diffs for debugging.
+- `View.setNeedsDisplay(_:)` accepts optional rectangles and automatically converts them to global coordinates, so only the affected portions of the tree are redrawn.
+
+These hooks enable unit tests to inspect what was drawn, and they pave the way for future tooling that exports frames (PNG/JPEG/video) straight from the terminal buffer.
+
 ## 5. Future Roadmap: Missing Widgets from C++ Tvision
 
 To achieve full functionality comparable to the original C++ Tvision framework, the following key UI components and functionalities need further development or enhancement in Swift:
