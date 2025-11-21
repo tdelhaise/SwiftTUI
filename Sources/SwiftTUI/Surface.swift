@@ -62,6 +62,16 @@ public struct Surface {
         }
     }
 
+    // Internal cell accessors for selection inversion
+    internal func cell(at index: Int) -> Cell {
+        return cells[index]
+    }
+
+    internal mutating func setCell(at index: Int, cell: Cell) {
+        guard index >= 0 && index < cells.count else { return }
+        cells[index] = cell
+    }
+
     public mutating func copy(from source: Surface, srcRect: Rect, dest: Point) {
         for sy in 0..<srcRect.size.height {
             let dy = dest.y + sy
