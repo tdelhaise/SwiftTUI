@@ -9,7 +9,7 @@ public struct ColorPair: Equatable, Sendable {
         self.background = background
     }
 
-    public static let `default` = ColorPair(foreground: .default, background: .default)
+    public static let `default` = ColorPair(foreground: ANSIColor.default, background: ANSIColor.default)
 }
 
 public enum PaletteEntry: CaseIterable, Hashable, Sendable {
@@ -57,28 +57,28 @@ public struct Palette: Sendable {
     // Predefined palettes
     public static let defaultBlue: Palette = {
         var p = Palette(colors: [:])
-        p[.desktop] = ColorPair(foreground: .white, background: .blue)
-        p[.windowNormal] = ColorPair(foreground: .white, background: .blue)
-        p[.windowActive] = ColorPair(foreground: .brightWhite, background: .blue)
-        p[.windowFrame] = ColorPair(foreground: .cyan, background: .blue)
-        p[.windowTitleNormal] = ColorPair(foreground: .white, background: .blue)
-        p[.windowTitleActive] = ColorPair(foreground: .brightWhite, background: .blue)
-        p[.buttonNormal] = ColorPair(foreground: .white, background: .blue)
-        p[.buttonFocused] = ColorPair(foreground: .brightWhite, background: .brightBlue)
-        p[.inputNormal] = ColorPair(foreground: .white, background: .cyan)
-        p[.inputFocused] = ColorPair(foreground: .brightWhite, background: .brightCyan)
-        p[.listNormal] = ColorPair(foreground: .white, background: .blue)
-        p[.listSelected] = ColorPair(foreground: .brightWhite, background: .brightBlue)
-        p[.scrollBarTrack] = ColorPair(foreground: .white, background: .blue)
-        p[.scrollBarThumb] = ColorPair(foreground: .brightWhite, background: .cyan)
-        p[.menuBarNormal] = ColorPair(foreground: .white, background: .default)
-        p[.menuBarActive] = ColorPair(foreground: .brightWhite, background: .blue)
-        p[.menuBoxNormal] = ColorPair(foreground: .white, background: .blue)
-        p[.menuBoxSelected] = ColorPair(foreground: .brightWhite, background: .brightBlue)
-        p[.dialogNormal] = ColorPair(foreground: .white, background: .blue)
-        p[.dialogMessage] = ColorPair(foreground: .white, background: .blue)
-        p[.clusterNormal] = ColorPair(foreground: .white, background: .default)
-        p[.statusLine] = ColorPair(foreground: .white, background: .blue)
+        p[.desktop] = ColorPair(foreground: ANSIColor.white, background: ANSIColor.blue)
+        p[.windowNormal] = ColorPair(foreground: ANSIColor.white, background: ANSIColor.blue)
+        p[.windowActive] = ColorPair(foreground: ANSIColor.brightWhite, background: ANSIColor.blue)
+        p[.windowFrame] = ColorPair(foreground: ANSIColor.cyan, background: ANSIColor.blue)
+        p[.windowTitleNormal] = ColorPair(foreground: ANSIColor.white, background: ANSIColor.blue)
+        p[.windowTitleActive] = ColorPair(foreground: ANSIColor.brightWhite, background: ANSIColor.blue)
+        p[.buttonNormal] = ColorPair(foreground: ANSIColor.white, background: ANSIColor.blue)
+        p[.buttonFocused] = ColorPair(foreground: ANSIColor.brightWhite, background: ANSIColor.brightBlue)
+        p[.inputNormal] = ColorPair(foreground: ANSIColor.white, background: ANSIColor.cyan)
+        p[.inputFocused] = ColorPair(foreground: ANSIColor.brightWhite, background: ANSIColor.brightCyan)
+        p[.listNormal] = ColorPair(foreground: ANSIColor.white, background: ANSIColor.blue)
+        p[.listSelected] = ColorPair(foreground: ANSIColor.brightWhite, background: ANSIColor.brightBlue)
+        p[.scrollBarTrack] = ColorPair(foreground: ANSIColor.white, background: ANSIColor.blue)
+        p[.scrollBarThumb] = ColorPair(foreground: ANSIColor.brightWhite, background: ANSIColor.cyan)
+        p[.menuBarNormal] = ColorPair(foreground: ANSIColor.white, background: ANSIColor.default)
+        p[.menuBarActive] = ColorPair(foreground: ANSIColor.brightWhite, background: ANSIColor.blue)
+        p[.menuBoxNormal] = ColorPair(foreground: ANSIColor.white, background: ANSIColor.blue)
+        p[.menuBoxSelected] = ColorPair(foreground: ANSIColor.brightWhite, background: ANSIColor.brightBlue)
+        p[.dialogNormal] = ColorPair(foreground: ANSIColor.white, background: ANSIColor.blue)
+        p[.dialogMessage] = ColorPair(foreground: ANSIColor.white, background: ANSIColor.blue)
+        p[.clusterNormal] = ColorPair(foreground: ANSIColor.white, background: ANSIColor.default)
+        p[.statusLine] = ColorPair(foreground: ANSIColor.white, background: ANSIColor.blue)
         return p
     }()
 }

@@ -1,6 +1,4 @@
 import Foundation
-import NIO
-import NIOExtras
 
 #if os(Linux)
 import Glibc
@@ -184,7 +182,7 @@ public struct Point: Equatable, Comparable {
 }
 
 // A basic implementation of a size (width and height).
-public struct Size: Equatable {
+public struct Size: Equatable, Sendable {
     public var width: Int
     public var height: Int
 
@@ -343,6 +341,10 @@ public enum Event: Sendable {
 
     case paste(String)
 
+    case screenResize(Size)
+
+    case timer(TimerToken)
+
     case none // Represents no event
 
 }
@@ -356,6 +358,8 @@ public struct EventMask: OptionSet, Sendable {
     @MainActor public static let mouse = EventMask(rawValue: 1 << 0)
     @MainActor public static let keyboard = EventMask(rawValue: 1 << 1)
     @MainActor public static let command = EventMask(rawValue: 1 << 2)
+    @MainActor public static let screenResize = EventMask(rawValue: 1 << 3)
+    @MainActor public static let timer = EventMask(rawValue: 1 << 4)
     // Add more event types as needed
 }
 
@@ -417,6 +421,12 @@ public typealias Validator = (String) -> ValidationResult
 // Represents a single entry in the history stack.
 public struct HistoryEntry: Equatable, Sendable {
     public let text: String
+}
+
+// Token identifying scheduled timers.
+public struct TimerToken: Hashable, Sendable {
+    fileprivate let id: UUID
+    public init() { self.id = UUID() }
 }
 
 // Manages a history stack for undo/redo operations.
@@ -607,9 +617,8 @@ public class Application {
     private var pendingDirtyRects: [Rect] = []
     private var clipboardStorage: String = ""
 
-    // NIO components
-    private let eventLoopGroup: EventLoopGroup
-    private var channel: Channel?
+    private var inputLoop: TerminalInputLoop?
+    private var timerHandlers: [TimerToken: @Sendable () -> Void] = [:]
     
     // Shutdown synchronization
     private let shutdownGroup = DispatchGroup()
@@ -620,7 +629,6 @@ public class Application {
 
     public init(terminal: TerminalProtocol = Terminal()) {
         self.terminal = terminal
-        self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         Application.shared = self // Set the shared instance
         // Enter the DispatchGroup when the application starts.
         // We will leave it when shutdown is complete.
@@ -630,16 +638,25 @@ public class Application {
     private func setupSignalHandlers() {
         let signalQueue = DispatchQueue(label: "com.swifttui.signalhandler")
         
-        [SIGTERM, SIGINT].forEach { sig in
+        [SIGTERM, SIGINT, SIGWINCH].forEach { sig in
             let signalSource = DispatchSource.makeSignalSource(signal: sig, queue: signalQueue)
             signalSource.setEventHandler {
-                print("Caught signal \(sig), initiating shutdown...")
-                Task {
-                    await self.stop()
-                }
+                self.handleSignal(sig)
             }
             signalSource.resume()
             self.signalSources.append(signalSource)
+        }
+    }
+
+    private func handleSignal(_ signal: Int32) {
+        switch signal {
+        case SIGWINCH:
+            Task { await self.post(event: .screenResize(terminal.getWindowSize())) }
+        case SIGINT, SIGTERM:
+            print("Caught signal \(signal), initiating shutdown...")
+            Task { await self.stop() }
+        default:
+            break
         }
     }
 
@@ -681,12 +698,8 @@ public class Application {
             terminal.hideCursor()
             setupSignalHandlers()
 
-            let bootstrap = NIOPipeBootstrap(group: eventLoopGroup)
-                .channelInitializer { channel in
-                    channel.pipeline.addHandler(TerminalInputHandler(application: self))
-                }
-
-            channel = try bootstrap.takingOwnershipOfDescriptor(input: STDIN_FILENO).wait()
+            inputLoop = TerminalInputLoop(application: self, fileDescriptor: terminal.inputFileDescriptor)
+            inputLoop?.start()
             
             isRunning = true
             print("Application started. Press Ctrl-Q or use the menu to quit.")
@@ -713,15 +726,7 @@ public class Application {
         print("Stopping application...")
         isRunning = false
         
-        // Close the channel, which will eventually stop the input handler
-        try? await channel?.close()
-
-        // Shut down the event loop group
-        do {
-            try await eventLoopGroup.shutdownGracefully()
-        } catch {
-            print("Error shutting down event loop group: \(error)")
-        }
+        inputLoop?.stop()
         
         // Leave the group to unblock the main thread
         shutdownGroup.leave()
@@ -733,6 +738,25 @@ public class Application {
             self.eventQueue.append(event)
             self.processEvents()
         }
+    }
+
+    /// Schedules a timer that enqueues .timer events on the application queue.
+    /// - Parameters:
+    ///   - interval: Interval in seconds; must be > 0.
+    ///   - repeating: Whether the timer repeats.
+    ///   - handler: Invoked on the main actor when the timer fires.
+    /// - Returns: A token that can be used to cancel the timer.
+    public func scheduleTimer(interval: TimeInterval, repeating: Bool = false, handler: @escaping @Sendable () -> Void) -> TimerToken? {
+        guard interval > 0 else { return nil }
+        guard let token = inputLoop?.scheduleTimer(interval: interval, repeating: repeating) else { return nil }
+        timerHandlers[token] = handler
+        return token
+    }
+
+    /// Cancels a previously scheduled timer.
+    public func cancelTimer(_ token: TimerToken) {
+        timerHandlers.removeValue(forKey: token)
+        inputLoop?.cancelTimer(token)
     }
 
     private func processEvents() {
@@ -782,6 +806,12 @@ public class Application {
             self.handlePaste(text: text)
         case .none:
             break
+        case .screenResize(let newSize):
+            handleScreenResize(newSize)
+        case .timer(let token):
+            if let handler = timerHandlers[token] {
+                handler()
+            }
         }
     }
 
@@ -796,6 +826,21 @@ public class Application {
         }
     }
 
+    private func handleScreenResize(_ newSize: Size) {
+        if let terminal = terminal as? Terminal {
+            terminal.resizeBuffers(to: newSize)
+        }
+
+        // Resize root view to match terminal bounds.
+        rootView?.frame = Rect(x: 0, y: 0, width: newSize.width, height: newSize.height)
+
+        if let desktop = rootView as? Desktop, let status = desktop.statusLine {
+            status.frame = Rect(x: 0, y: max(0, newSize.height - 1), width: newSize.width, height: 1)
+        }
+
+        pendingDirtyRects.append(Rect(x: 0, y: 0, width: newSize.width, height: newSize.height))
+    }
+
     func setClipboardText(_ text: String) {
         clipboardStorage = text
         // TODO: send OSC 52 / far2l requests when outbound channel is ready.
@@ -803,34 +848,5 @@ public class Application {
 
     func clipboardText() -> String? {
         return clipboardStorage
-    }
-}
-
-// Private NIO Channel Handler for processing terminal input
-private final class TerminalInputHandler: ChannelInboundHandler, @unchecked Sendable {
-    public typealias InboundIn = ByteBuffer
-    private weak var application: Application?
-    private let parser = TerminalInputParser()
-
-    init(application: Application) {
-        self.application = application
-    }
-
-    public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        var buffer = self.unwrapInboundIn(data)
-        guard let application = self.application else { return }
-
-        while let byte = buffer.readInteger(as: UInt8.self) {
-            let events = parser.feed(byte: byte)
-            for event in events {
-                Task { await application.post(event: event) }
-            }
-        }
-    }
-
-    public func errorCaught(context: ChannelHandlerContext, error: Error) {
-        print("TerminalInputHandler error: \(error)")
-        context.close(promise: nil)
-        Task { await application?.stop() }
     }
 }

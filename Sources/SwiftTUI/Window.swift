@@ -95,6 +95,11 @@ open class Window: BaseView {
     }
 
     override open func handle(keyEvent: KeyEvent) -> Bool {
+        if keyEvent.controlKeyState.contains(.control) && keyEvent.character == "q" {
+            Task { await Application.shared.post(event: .command(.cmQuit)) }
+            return true
+        }
+
         // Handle Tab/Shift+Tab for focus navigation within the window
         if keyEvent.keyCode == 9 /* Tab */ {
             // Implement focus navigation logic

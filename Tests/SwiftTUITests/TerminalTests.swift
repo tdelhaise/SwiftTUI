@@ -25,34 +25,36 @@ final class TerminalTests {
 
     // Test writing to terminal
     @Test func testTerminalWrite() async throws {
-        // This test requires manual verification of console output or a mock terminal.
-        // For now, we'll just call it and ensure it doesn't crash.
-        Terminal.write("Test Write: Hello, SwiftTUI!\n") // Ensure newline for visibility
-        Terminal.write("A")
-        Terminal.write("B")
-        Terminal.write("C\n")
-        // No direct assertion possible without mocking stdout
+        let terminal = MockTerminal()
+        terminal.write("Test Write: Hello, SwiftTUI!\n")
+        terminal.write("ABC")
+        #expect(terminal.capturedOutput.contains("Hello, SwiftTUI!"))
+        #expect(terminal.capturedOutput.hasSuffix("ABC"))
     }
 
     // Test clear screen and cursor movement
     @Test func testTerminalClearAndMoveCursor() async throws {
-        // This test also requires manual verification.
-        Terminal.clearScreen()
-        Terminal.moveCursor(toX: 5, y: 5)
-        Terminal.write("Cursor is at 5,5 now.\n")
-        Terminal.moveCursor(toX: 1, y: 1)
-        #expect(true, "Manual verification needed for clearScreen and moveCursor")
+        let terminal = MockTerminal()
+        terminal.clearScreen()
+        terminal.moveCursor(to: Point(x: 5, y: 5))
+        terminal.write("Cursor is at 5,5 now.\n")
+        terminal.moveCursor(to: Point(x: 1, y: 1))
+
+        #expect(terminal.capturedOutput.contains(ANSI.clearScreen))
+        #expect(terminal.cursorPosition == Point(x: 1, y: 1))
     }
 
     // Test hide and show cursor
     @Test func testTerminalCursorVisibility() async throws {
-        // Manual verification needed.
-        Terminal.hideCursor()
-        Terminal.write("Cursor should be hidden.\n")
-        try await Task.sleep(nanoseconds: 1_000_000_000) // Give time to observe (1 second)
-        Terminal.showCursor()
-        Terminal.write("Cursor should be visible again.\n")
-        #expect(true, "Manual verification needed for hideCursor and showCursor")
+        let terminal = MockTerminal()
+        terminal.hideCursor()
+        terminal.write("Cursor should be hidden.\n")
+        terminal.showCursor()
+        terminal.write("Cursor should be visible again.\n")
+
+        #expect(terminal.isCursorHidden == false)
+        #expect(terminal.capturedOutput.contains(ANSI.hideCursor))
+        #expect(terminal.capturedOutput.contains(ANSI.showCursor))
     }
 
     // Test read character (requires user input simulation or a specialized test runner)

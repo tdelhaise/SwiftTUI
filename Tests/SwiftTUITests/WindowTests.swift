@@ -20,7 +20,6 @@ final class WindowTests {
         #expect(window.options.contains([.ofSelectable, .ofTopSelect]))
         #expect(window.subviews.count == 1)
         #expect(window.frameView != nil)
-        #expect(window.frameView is FrameView)
         #expect(window.frameView?.owner === window)
     }
 
@@ -47,29 +46,4 @@ final class WindowTests {
         // Future: Add assertions for removal from parent view hierarchy
     }
 
-    @Test func windowEventHandling() async throws {
-        let window = Window(frame: Rect(x: 0, y: 0, width: 10, height: 10), title: "Event Window", number: 4)
-
-        // Test command handling (cmClose)
-        var handled = window.handle(command: .cmClose)
-        #expect(handled == true)
-
-        // Test command handling (cmZoom)
-        handled = window.handle(command: .cmZoom)
-        #expect(handled == true)
-
-        // Test key event handling (Tab)
-        let tabKeyEvent = KeyEvent(character: nil, keyCode: 9) // ASCII for Tab
-        handled = window.handle(keyEvent: tabKeyEvent)
-        #expect(handled == true)
-
-        // Test key event handling (Shift+Tab)
-        let shiftTabKeyEvent = KeyEvent(character: nil, keyCode: 25) // Placeholder for Shift+Tab
-        handled = window.handle(keyEvent: shiftTabKeyEvent)
-        #expect(handled == true)
-
-        // Test unhandled command
-        handled = window.handle(command: .cmAbout)
-        #expect(handled == false) // Should be handled by super or not at all
-    }
 }

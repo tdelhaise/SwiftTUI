@@ -35,12 +35,12 @@ import Testing
         let mockView = MockView(frame: Rect(x: 0, y: 0, width: 80, height: 24))
 
         // Test Key Event
-        let keyEvent = KeyEvent(character: "a", keyCode: 97)
+        let keyEvent = KeyEvent(character: "a", keyCode: 97, controlKeyState: [])
         _ = mockView.handle(keyEvent: keyEvent)
         #expect(mockView.handleKeyEventCalled == true)
 
         // Test Mouse Event
-        let mouseEvent = MouseEvent(x: 10, y: 10, type: .pressed)
+        let mouseEvent = MouseEvent(x: 10, y: 10, eventType: .mouseDown, controlKeyState: [])
         _ = mockView.handle(mouseEvent: mouseEvent)
         #expect(mockView.handleMouseEventCalled == true)
 

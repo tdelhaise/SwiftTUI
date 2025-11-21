@@ -16,32 +16,38 @@ public struct ScreenBuffer {
     public private(set) var width: Int
     public private(set) var height: Int
     private var buffer: [Cell]
-    private var changeTrackingEnabled: Bool = false
-    private var changedCells: Set<Int> = []
+    private var rowDamage: [Range<Int>]
 
     public init(width: Int, height: Int) {
         self.width = width
         self.height = height
         self.buffer = Array(repeating: Cell(), count: width * height)
+        self.rowDamage = Array(repeating: 0..<0, count: height)
     }
 
     public mutating func resize(width: Int, height: Int) {
         if self.width == width && self.height == height { return }
-
-        let newBuffer = Array(repeating: Cell(), count: width * height)
-        // TODO: Copy existing content to new buffer if needed, handling size changes
+        var newBuffer = Array(repeating: Cell(), count: width * height)
+        let copyWidth = min(self.width, width)
+        let copyHeight = min(self.height, height)
+        for y in 0..<copyHeight {
+            let oldStart = y * self.width
+            let oldEnd = oldStart + copyWidth
+            let newStart = y * width
+            newBuffer.replaceSubrange(newStart..<(newStart + copyWidth), with: buffer[oldStart..<oldEnd])
+        }
         self.width = width
         self.height = height
         self.buffer = newBuffer
+        self.rowDamage = Array(repeating: 0..<0, count: height)
     }
 
     public mutating func setCell(x: Int, y: Int, cell: Cell) {
         guard x >= 0 && x < width && y >= 0 && y < height else { return }
         let index = y * width + x
-        let previous = buffer[index]
-        buffer[index] = cell
-        if changeTrackingEnabled && previous != cell {
-            changedCells.insert(index)
+        if buffer[index] != cell {
+            buffer[index] = cell
+            markDirty(x: x, y: y)
         }
     }
 
@@ -52,32 +58,40 @@ public struct ScreenBuffer {
 
     public mutating func fill(with cell: Cell) {
         buffer = Array(repeating: cell, count: width * height)
+        for y in 0..<height {
+            rowDamage[y] = 0..<width
+        }
     }
 
     public func getBuffer() -> [Cell] {
         return buffer
     }
 
-    public mutating func enableChangeTracking(_ enabled: Bool) {
-        changeTrackingEnabled = enabled
-        if !enabled {
-            changedCells.removeAll(keepingCapacity: true)
+    public func dirtyRanges() -> [(row: Int, range: Range<Int>)] {
+        var ranges: [(Int, Range<Int>)] = []
+        for (row, range) in rowDamage.enumerated() where !range.isEmpty {
+            ranges.append((row, range))
+        }
+        return ranges
+    }
+
+    public mutating func clearDirtyRanges() {
+        rowDamage = Array(repeating: 0..<0, count: height)
+    }
+
+    private mutating func markDirty(x: Int, y: Int) {
+        let range = rowDamage[y]
+        if range.isEmpty {
+            rowDamage[y] = x..<(x + 1)
+        } else {
+            let newStart = min(range.lowerBound, x)
+            let newEnd = max(range.upperBound, x + 1)
+            rowDamage[y] = newStart..<newEnd
         }
     }
 
     public func snapshot() -> ScreenSnapshot {
         return ScreenSnapshot(width: width, height: height, cells: buffer)
-    }
-
-    public func diffSinceTrackingEnabled() -> [Rect] {
-        guard changeTrackingEnabled, !changedCells.isEmpty else { return [] }
-        var rectangles: [Rect] = []
-        for index in changedCells {
-            let y = index / width
-            let x = index % width
-            rectangles.append(Rect(x: x, y: y, width: 1, height: 1))
-        }
-        return rectangles
     }
 }
 

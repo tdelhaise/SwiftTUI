@@ -152,13 +152,13 @@ open class EditorView: MemoView {
                 cursorPosition.x = 0
                 handled = true
             default:
-                if let char = keyEvent.character, char.isPrintableASCII {
+                if let str = keyEvent.character, let char = str.first, let ascii = char.asciiValue, ascii >= 32 && ascii <= 126 {
                     let lineIndex = cursorPosition.y
                     var currentLine = lines[lineIndex]
-                    currentLine.insert(char, at: currentLine.index(currentLine.startIndex, offsetBy: cursorPosition.x))
+                    currentLine.insert(contentsOf: str, at: currentLine.index(currentLine.startIndex, offsetBy: cursorPosition.x))
                     lines[lineIndex] = currentLine
                     text = lines.joined(separator: "\n") // Update text to trigger didSet
-                    cursorPosition.x += 1
+                    cursorPosition.x += str.count
                     handled = true
                 }
             }

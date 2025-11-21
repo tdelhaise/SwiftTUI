@@ -13,10 +13,16 @@ class MockTerminal: TerminalProtocol {
     var simulatedInput: [UInt8] = []
     var cursorPosition: Point = .zero
     var isCursorHidden: Bool = false
-    var windowSize: Size = Size(width: 80, height: 24) // Default mock size
+    let inputFileDescriptor: Int32 = -1
+    var windowSize: Size = Size(width: 80, height: 24) {
+        didSet {
+            screenBuffer.resize(width: windowSize.width, height: windowSize.height)
+        }
+    }
 
     private var rawModeEnabled: Bool = false
     private var mouseTrackingEnabled: Bool = false
+    private var screenBuffer: ScreenBuffer
 
     // MARK: - TerminalProtocol Conformance
 
@@ -68,6 +74,14 @@ class MockTerminal: TerminalProtocol {
         return windowSize
     }
 
+    func writeToBuffer(x: Int, y: Int, char: Character, foreground: ANSIColor, background: ANSIColor) {
+        screenBuffer.setCell(x: x, y: y, cell: Cell(character: char, foregroundColor: foreground, backgroundColor: background))
+    }
+
+    func renderBuffer() {
+        // No-op for mock
+    }
+
     // MARK: - Mocking Utilities
 
     /// Feeds a string into the simulated input buffer.
@@ -80,13 +94,10 @@ class MockTerminal: TerminalProtocol {
         // This is a simplified representation. In a real scenario, you'd
         // convert KeyEvent to its corresponding ANSI escape sequence bytes.
         // For now, we'll just feed the character if available.
-        if let char = keyEvent.character?.asciiValue {
-            simulatedInput.append(char)
+        if let scalar = keyEvent.character?.unicodeScalars.first {
+            simulatedInput.append(UInt8(scalar.value))
         } else {
-            // Handle special keys (e.g., arrow keys) by appending their escape sequences
-            // This would require a mapping from KeyCode to ANSI escape sequences.
-            // For example:
-            // if keyEvent.keyCode == .upArrow { simulatedInput.append(contentsOf: [0x1B, 0x5B, 0x41]) }
+            // TODO: Extend with escape-sequence mappings for non-printable keys.
         }
     }
 
@@ -99,5 +110,16 @@ class MockTerminal: TerminalProtocol {
         rawModeEnabled = false
         mouseTrackingEnabled = false
         windowSize = Size(width: 80, height: 24)
+        screenBuffer = ScreenBuffer(width: windowSize.width, height: windowSize.height)
+    }
+
+    func snapshot() -> ScreenSnapshot {
+        return screenBuffer.snapshot()
+    }
+
+    // MARK: - Init
+
+    init() {
+        self.screenBuffer = ScreenBuffer(width: windowSize.width, height: windowSize.height)
     }
 }

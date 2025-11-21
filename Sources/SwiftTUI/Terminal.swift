@@ -14,6 +14,7 @@ import Darwin.C
     var cursorPosition: Point { get set }
     var isCursorHidden: Bool { get set }
     var windowSize: Size { get }
+    var inputFileDescriptor: Int32 { get }
 
     func enableRawMode() throws
     func disableRawMode() throws
@@ -35,9 +36,11 @@ import Darwin.C
 public class Terminal: TerminalProtocol {
 
     internal static var originalTerminalAttributes: termios?
+    private let ownsInputFileDescriptor: Bool
     
     internal var currentBuffer: ScreenBuffer
     internal var previousBuffer: ScreenBuffer
+    public let inputFileDescriptor: Int32
 
     public var cursorPosition: Point = .zero
     public var isCursorHidden: Bool = false
@@ -50,6 +53,10 @@ public class Terminal: TerminalProtocol {
     public private(set) var hasTrueColor: Bool = false
 
     public init() {
+        let inputFDResult = Terminal.openInputFileDescriptor()
+        self.inputFileDescriptor = inputFDResult.fd
+        self.ownsInputFileDescriptor = inputFDResult.ownsDescriptor
+
         let defaultSize = Size(width: 80, height: 24)
         let sizeTuple = Terminal.getStaticWindowSize()
         let size = sizeTuple.map { Size(width: $0.width, height: $0.height) } ?? defaultSize
@@ -69,13 +76,35 @@ public class Terminal: TerminalProtocol {
         }
     }
 
+    deinit {
+        if ownsInputFileDescriptor && inputFileDescriptor >= 0 {
+            #if os(Linux)
+            Glibc.close(inputFileDescriptor)
+            #else
+            Darwin.close(inputFileDescriptor)
+            #endif
+        }
+    }
+
+    private static func openInputFileDescriptor() -> (fd: Int32, ownsDescriptor: Bool) {
+        #if os(Linux)
+        let fd = Glibc.open("/dev/tty", O_RDONLY | O_NONBLOCK)
+        #else
+        let fd = Darwin.open("/dev/tty", O_RDONLY | O_NONBLOCK)
+        #endif
+        if fd >= 0 {
+            return (fd, true)
+        }
+        return (STDIN_FILENO, false)
+    }
+
     /// Switches the terminal to raw mode.
     /// In raw mode, input is unbuffered and special characters (like Ctrl+C) are not processed by the terminal driver.
     public func enableRawMode() throws {
         var term = termios()
 
         // Get current terminal attributes
-        if tcgetattr(STDIN_FILENO, &term) != 0 {
+        if tcgetattr(inputFileDescriptor, &term) != 0 {
             throw TerminalError.failedToGetTerminalAttributes(errno: errno)
         }
 
@@ -88,7 +117,7 @@ public class Terminal: TerminalProtocol {
         term.c_cc.5 = 1 // VTIME = 1 (timeout of 0.1 seconds for read)
 
         // Set new terminal attributes
-        if tcsetattr(STDIN_FILENO, TCSANOW, &term) != 0 {
+        if tcsetattr(inputFileDescriptor, TCSANOW, &term) != 0 {
             throw TerminalError.failedToSetTerminalAttributes(errno: errno)
         }
 
@@ -103,7 +132,7 @@ public class Terminal: TerminalProtocol {
             return
         }
 
-        if tcsetattr(STDIN_FILENO, TCSANOW, &originalTerm) != 0 {
+        if tcsetattr(inputFileDescriptor, TCSANOW, &originalTerm) != 0 {
             throw TerminalError.failedToRestoreTerminalAttributes(errno: errno)
         }
         Terminal.originalTerminalAttributes = nil
@@ -133,9 +162,9 @@ public class Terminal: TerminalProtocol {
     public func readCharacter() -> UInt8? {
         var byte: UInt8 = 0
         #if os(Linux)
-        let bytesRead = Glibc.read(STDIN_FILENO, &byte, 1)
+        let bytesRead = Glibc.read(inputFileDescriptor, &byte, 1)
         #else
-        let bytesRead = Darwin.read(STDIN_FILENO, &byte, 1)
+        let bytesRead = Darwin.read(inputFileDescriptor, &byte, 1)
         #endif
 
         if bytesRead == 1 {
@@ -199,23 +228,21 @@ public class Terminal: TerminalProtocol {
         let cursorY = cursorPosition.y
         let shouldInvertCursor = !isCursorHidden
 
-        for y in 0..<currentBuffer.height {
-            for x in 0..<currentBuffer.width {
-                guard let currentCell = currentBuffer.getCell(x: x, y: y),
-                      let previousCell = previousBuffer.getCell(x: x, y: y) else {
+        for (row, range) in currentBuffer.dirtyRanges() {
+            for x in range {
+                guard let currentCell = currentBuffer.getCell(x: x, y: row),
+                      let previousCell = previousBuffer.getCell(x: x, y: row) else {
                     continue
                 }
 
                 var outputCell = currentCell
-                if shouldInvertCursor && x == cursorX && y == cursorY {
+                if shouldInvertCursor && x == cursorX && row == cursorY {
                     outputCell = outputCell.withInvertedColors()
                 }
 
                 if outputCell != previousCell {
-                    // If not adjacent or colors changed, move cursor and set colors
-                    if x != currentX + 1 || y != currentY || outputCell.foregroundColor != currentFg || outputCell.backgroundColor != currentBg {
-                        outputString += ANSI.cursorPosition(row: y + 1, col: x + 1)
-                        
+                    if x != currentX + 1 || row != currentY || outputCell.foregroundColor != currentFg || outputCell.backgroundColor != currentBg {
+                        outputString += ANSI.cursorPosition(row: row + 1, col: x + 1)
                         if outputCell.foregroundColor != currentFg {
                             outputString += ANSI.foregroundColor(outputCell.foregroundColor)
                             currentFg = outputCell.foregroundColor
@@ -227,11 +254,13 @@ public class Terminal: TerminalProtocol {
                     }
                     outputString += String(outputCell.character)
                     currentX = x
-                    currentY = y
+                    currentY = row
                 }
-                nextPreviousBuffer.setCell(x: x, y: y, cell: outputCell)
+
+                nextPreviousBuffer.setCell(x: x, y: row, cell: outputCell)
             }
         }
+        currentBuffer.clearDirtyRanges()
         // Reset colors and move cursor to its last known position
         outputString += ANSI.resetAttributes
         outputString += ANSI.cursorPosition(row: cursorPosition.y + 1, col: cursorPosition.x + 1)
@@ -250,6 +279,14 @@ public class Terminal: TerminalProtocol {
             self.write(clearSequence)
         } else {
             self.write(ANSI.clearScreen)
+        }
+    }
+
+    public func resizeBuffers(to size: Size) {
+        currentBuffer.resize(width: size.width, height: size.height)
+        previousBuffer.resize(width: size.width, height: size.height)
+        if cursorPosition.x >= size.width || cursorPosition.y >= size.height {
+            cursorPosition = Point(x: min(cursorPosition.x, size.width - 1), y: min(cursorPosition.y, size.height - 1))
         }
     }
 

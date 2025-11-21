@@ -46,13 +46,10 @@ open class MenuBar: BaseView {
 
         // Handle Alt + shortcut key to activate a menu
         if keyEvent.controlKeyState.contains(.alt), let char = keyEvent.character {
-            for (index, item) in menuItems.enumerated() {
-                if let shortcut = item.shortcut, Character(char.uppercased()) == Character(String(shortcut).uppercased()) {
-                    activeMenuIndex = index
-                    print("  MenuBar: Alt+\(char) activated menu '\(item.title)'")
-                    // In a real app, this would open the submenu
-                    return true
-                }
+            if let index = menuItems.firstIndex(where: { $0.shortcut?.uppercased() == char.uppercased() }) {
+                activeMenuIndex = index
+                // In a real app, this would open the submenu
+                return true
             }
         }
 
@@ -60,31 +57,29 @@ open class MenuBar: BaseView {
         case KeyEvent.KeyCode.escape:
             if activeMenuIndex != nil {
                 activeMenuIndex = nil // Close active menu
-                print("  MenuBar: Escape pressed, closing active menu.")
                 return true
+            } else {
+                // If no menu is active, let the desktop handle returning focus
+                return false 
             }
         case KeyEvent.KeyCode.leftArrow:
             if let activeIndex = activeMenuIndex {
                 activeMenuIndex = max(0, activeIndex - 1)
-                print("  MenuBar: Left arrow, active menu now \(menuItems[activeMenuIndex!].title)")
                 return true
             }
         case KeyEvent.KeyCode.rightArrow:
             if let activeIndex = activeMenuIndex {
                 activeMenuIndex = min(menuItems.count - 1, activeIndex + 1)
-                print("  MenuBar: Right arrow, active menu now \(menuItems[activeMenuIndex!].title)")
                 return true
             }
         case KeyEvent.KeyCode.enter:
             if let activeIndex = activeMenuIndex {
                 let item = menuItems[activeIndex]
                 if let command = item.command {
-                    print("  MenuBar: Activating command \(command) for '\(item.title)'")
-                    _ = owner?.handle(command: command) // Pass command up the hierarchy
+                    Task { await Application.shared.post(event: .command(command)) }
                     activeMenuIndex = nil // Close menu after command
                     return true
                 } else if item.subitems != nil {
-                    print("  MenuBar: Opening submenu for '\(item.title)'")
                     // In a real app, this would open the submenu
                     return true
                 }
