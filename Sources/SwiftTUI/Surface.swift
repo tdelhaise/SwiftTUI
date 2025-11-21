@@ -41,6 +41,27 @@ public struct Surface {
         }
     }
 
+    public mutating func putAlignedString(x: Int, y: Int, width: Int, text: String, alignment: TextAlignment, fg: ANSIColor = .default, bg: ANSIColor = .default) {
+        guard width > 0 else { return }
+        let clippedWidth = min(width, self.width - x)
+        guard clippedWidth > 0 else { return }
+        let truncated = String(text.prefix(clippedWidth))
+        let pad = max(0, clippedWidth - truncated.count)
+        let offset: Int
+        switch alignment {
+        case .left:
+            offset = 0
+        case .center:
+            offset = pad / 2
+        case .right:
+            offset = pad
+        }
+        putString(x: x + offset, y: y, text: truncated, fg: fg, bg: bg)
+        if pad > 0 {
+            fillRect(x: x, y: y, w: clippedWidth, h: 1, char: " ", fg: fg, bg: bg)
+        }
+    }
+
     public mutating func copy(from source: Surface, srcRect: Rect, dest: Point) {
         for sy in 0..<srcRect.size.height {
             let dy = dest.y + sy
@@ -56,6 +77,27 @@ public struct Surface {
                 cells[dy * width + dx] = cell
             }
         }
+    }
+
+    public mutating func drawBorder(rect: Rect, style: BorderStyle = .single, fg: ANSIColor = .default, bg: ANSIColor = .default) {
+        guard let clipped = rect.intersection(Rect(x: 0, y: 0, width: width, height: height)) else { return }
+        let chars = style.characters
+        for x in clipped.origin.x..<clipped.origin.x + clipped.size.width {
+            // top
+            put(x: x, y: clipped.origin.y, char: chars.horizontal, fg: fg, bg: bg)
+            // bottom
+            put(x: x, y: clipped.origin.y + clipped.size.height - 1, char: chars.horizontal, fg: fg, bg: bg)
+        }
+        for y in clipped.origin.y..<clipped.origin.y + clipped.size.height {
+            // left
+            put(x: clipped.origin.x, y: y, char: chars.vertical, fg: fg, bg: bg)
+            // right
+            put(x: clipped.origin.x + clipped.size.width - 1, y: y, char: chars.vertical, fg: fg, bg: bg)
+        }
+        put(x: clipped.origin.x, y: clipped.origin.y, char: chars.topLeft, fg: fg, bg: bg)
+        put(x: clipped.origin.x + clipped.size.width - 1, y: clipped.origin.y, char: chars.topRight, fg: fg, bg: bg)
+        put(x: clipped.origin.x, y: clipped.origin.y + clipped.size.height - 1, char: chars.bottomLeft, fg: fg, bg: bg)
+        put(x: clipped.origin.x + clipped.size.width - 1, y: clipped.origin.y + clipped.size.height - 1, char: chars.bottomRight, fg: fg, bg: bg)
     }
 
     public mutating func fillRow(y: Int, char: Character = " ", fg: ANSIColor = .default, bg: ANSIColor = .default) {
@@ -78,6 +120,20 @@ public struct Surface {
                     background: cell.backgroundColor
                 )
             }
+        }
+    }
+}
+
+public enum BorderStyle {
+    case single
+    case double
+
+    var characters: (horizontal: Character, vertical: Character, topLeft: Character, topRight: Character, bottomLeft: Character, bottomRight: Character) {
+        switch self {
+        case .single:
+            return ("─", "│", "┌", "┐", "└", "┘")
+        case .double:
+            return ("═", "║", "╔", "╗", "╚", "╝")
         }
     }
 }
