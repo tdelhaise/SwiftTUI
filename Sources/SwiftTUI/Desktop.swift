@@ -104,20 +104,17 @@ open class Desktop: BaseView {
             }
         }
 
-        if keyEvent.keyCode == KeyEvent.KeyCode.f10 {
-            if let menuBar = menuBar {
-                if menuBar.state.contains(.sfFocused) {
-                    // Menu bar is focused, return focus to the last focused window
-                    menuBar.setState(.sfFocused, enable: false)
-                    lastFocusedWindow?.setState(.sfFocused, enable: true)
-                } else {
-                    // Menu bar is not focused, give it focus
-                    lastFocusedWindow = windows.first(where: { $0.state.contains(.sfFocused) })
-                    lastFocusedWindow?.setState(.sfFocused, enable: false)
-                    menuBar.setState(.sfFocused, enable: true)
-                }
-                return true
+        if keyEvent.keyCode == KeyEvent.KeyCode.f10, let menuBar = menuBar {
+            if menuBar.state.contains(.sfFocused) {
+                menuBar.setState(.sfFocused, enable: false)
+                lastFocusedWindow?.setState(.sfFocused, enable: true)
+            } else {
+                lastFocusedWindow = windows.first(where: { $0.state.contains(.sfFocused) })
+                lastFocusedWindow?.setState(.sfFocused, enable: false)
+                menuBar.activeMenuIndex = menuBar.activeMenuIndex ?? 0
+                menuBar.setState(.sfFocused, enable: true)
             }
+            return true
         }
 
         if let menuBar = menuBar, menuBar.state.contains(.sfFocused) {
