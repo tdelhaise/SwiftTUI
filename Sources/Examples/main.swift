@@ -1,18 +1,14 @@
 import SwiftTUI
 import Foundation
 
-@main
-struct Swifted {
-    static func main() {
-        let app = Application()
-        let desktopFrame = Rect(origin: .zero, size: app.terminal.windowSize)
-        let desktop = SwiftedDesktop(frame: desktopFrame)
-        desktop.installMenuBar()
-        desktop.installStatusLine()
-        app.setRootView(desktop)
-        app.run()
-    }
-}
+// Entry point for the Swifted (tvedit-like) example.
+let app = Application()
+let desktopFrame = Rect(origin: .zero, size: app.terminal.windowSize)
+let desktop = SwiftedDesktop(frame: desktopFrame)
+desktop.installMenuBar()
+desktop.installStatusLine()
+app.setRootView(desktop)
+app.run()
 
 // MARK: - Desktop controller
 @MainActor
@@ -35,6 +31,11 @@ final class SwiftedDesktop: Desktop {
             MenuItem(title: "Copy", command: .cmCopy, shortcut: "C".first),
             MenuItem(title: "Paste", command: .cmPaste, shortcut: "P".first)
         ])
+        let searchMenu = MenuItem(title: "Search", shortcut: "S".first, subitems: [
+            MenuItem(title: "Find", command: .cmFind, shortcut: "F".first),
+            MenuItem(title: "Replace", command: .cmReplace, shortcut: "R".first),
+            MenuItem(title: "Search Again", command: .cmSearchAgain, shortcut: "A".first)
+        ])
         let windowMenu = MenuItem(title: "Window", shortcut: "W".first, subitems: [
             MenuItem(title: "Zoom", command: .cmZoom, shortcut: "Z".first),
             MenuItem(title: "Next", command: .cmNext, shortcut: "N".first),
@@ -42,7 +43,7 @@ final class SwiftedDesktop: Desktop {
             MenuItem(title: "Tile", command: .cmTile, shortcut: "T".first),
             MenuItem(title: "Cascade", command: .cmCascade, shortcut: "C".first)
         ])
-        let menuBar = MenuBar(frame: menuFrame, menuItems: [fileMenu, editMenu, windowMenu])
+        let menuBar = MenuBar(frame: menuFrame, menuItems: [fileMenu, editMenu, searchMenu, windowMenu])
         set(menuBar: menuBar)
     }
 
@@ -119,6 +120,25 @@ final class SwiftedDesktop: Desktop {
                 bringToFront(window: last)
             }
             return true
+        case .cmFind:
+            if let editorWin = activeEditorWindow() {
+                let dialog = FindDialog { text in
+                    editorWin.doFind(text: text)
+                }
+                add(subview: dialog)
+            }
+            return true
+        case .cmSearchAgain:
+            activeEditorWindow()?.doSearchAgain()
+            return true
+        case .cmReplace:
+            if let editorWin = activeEditorWindow() {
+                let dialog = ReplaceDialog { find, replace in
+                    editorWin.doReplace(find: find, replace: replace)
+                }
+                add(subview: dialog)
+            }
+            return true
         default:
             return super.handle(command: command)
         }
@@ -130,6 +150,8 @@ final class SwiftedDesktop: Desktop {
 final class EditorWindow: Window {
     let editor: EditorView
     var filePath: String?
+    private var lastSearch: String?
+    private var lastReplace: String?
     private var isDirty: Bool = false {
         didSet { updateTitle() }
     }
@@ -167,5 +189,39 @@ final class EditorWindow: Window {
             return true
         }
         return super.handle(keyEvent: keyEvent)
+    }
+
+    func doFind(text: String) {
+        lastSearch = text
+        if editor.find(text) == false {
+            showInfo("Search string not found.")
+        }
+    }
+
+    func doSearchAgain() {
+        guard let query = lastSearch else {
+            showInfo("No previous search.")
+            return
+        }
+        if editor.find(query, startAtNext: true) == false {
+            showInfo("Search string not found.")
+        }
+    }
+
+    func doReplace(find: String, replace: String) {
+        lastSearch = find
+        lastReplace = replace
+        if editor.replaceFirst(find: find, replace: replace) == false {
+            showInfo("Search string not found.")
+        } else {
+            isDirty = true
+        }
+    }
+
+    private func showInfo(_ msg: String) {
+        if let desktop = Application.shared.rootView as? Desktop {
+            let dialog = MessageBox.show(title: "Info", message: msg)
+            desktop.add(subview: dialog)
+        }
     }
 }

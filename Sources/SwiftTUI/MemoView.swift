@@ -56,7 +56,7 @@ open class MemoView: BaseView {
         setNeedsDisplay()
     }
 
-    private func insertText(_ newText: String) {
+    internal func insertText(_ newText: String) {
         guard !newText.isEmpty, !lines.isEmpty else {
             if !newText.isEmpty {
                 text = newText

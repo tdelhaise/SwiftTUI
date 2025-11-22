@@ -17,8 +17,7 @@ open class EditorView: MemoView {
     override open func draw(in rect: Rect) {
         super.draw(in: rect) // Draw MemoView content
 
-        // TODO: Implement drawing of selected text
-        // This would involve iterating through the selectedRange and drawing characters with different colors
+        // Selection drawing can be added here if selectionRange is set.
     }
 
     override open func handle(keyEvent: KeyEvent) -> Bool {
@@ -42,12 +41,13 @@ open class EditorView: MemoView {
                     handled = true
                 }
             } else if keyEvent.character == "c" { // Ctrl+C for Copy
-                // TODO: Implement copy to clipboard
-                print("EditorView: Ctrl+C pressed (Copy)")
+                copyCurrentLine()
                 handled = true
             } else if keyEvent.character == "v" { // Ctrl+V for Paste
-                // TODO: Implement paste from clipboard
-                print("EditorView: Ctrl+V pressed (Paste)")
+                pasteClipboard()
+                handled = true
+            } else if keyEvent.character == "x" { // Ctrl+X for Cut
+                cutCurrentLine()
                 handled = true
             }
         }
@@ -175,5 +175,54 @@ open class EditorView: MemoView {
             return true
         }
         return super.handle(keyEvent: keyEvent)
+    }
+
+    // MARK: - Find/Replace helpers
+    public func find(_ query: String, startAtNext: Bool = false) -> Bool {
+        guard !query.isEmpty else { return false }
+        let startLine = startAtNext ? cursorPosition.y + 1 : cursorPosition.y
+        for idx in startLine..<lines.count {
+            if lines[idx].contains(query) {
+                cursorPosition = Point(x: lines[idx].firstIndex(of: query.first!)?.utf16Offset(in: lines[idx]) ?? 0, y: idx)
+                return true
+            }
+        }
+        return false
+    }
+
+    public func replaceFirst(find: String, replace: String) -> Bool {
+        guard !find.isEmpty else { return false }
+        for (idx, line) in lines.enumerated() {
+            if let range = line.range(of: find) {
+                let newLine = line.replacingCharacters(in: range, with: replace)
+                lines[idx] = newLine
+                text = lines.joined(separator: "\n")
+                cursorPosition = Point(x: range.lowerBound.utf16Offset(in: newLine), y: idx)
+                return true
+            }
+        }
+        return false
+    }
+
+    // MARK: - Clipboard
+    private func copyCurrentLine() {
+        guard cursorPosition.y < lines.count else { return }
+        Application.shared.setClipboardText(lines[cursorPosition.y])
+    }
+
+    private func cutCurrentLine() {
+        guard cursorPosition.y < lines.count else { return }
+        Application.shared.setClipboardText(lines[cursorPosition.y])
+        lines.remove(at: cursorPosition.y)
+        if lines.isEmpty { lines = [""] }
+        cursorPosition.y = max(0, min(cursorPosition.y, lines.count - 1))
+        cursorPosition.x = min(cursorPosition.x, lines[cursorPosition.y].count)
+        text = lines.joined(separator: "\n")
+    }
+
+    private func pasteClipboard() {
+        if let clip = Application.shared.clipboardText() {
+            insertText(clip)
+        }
     }
 }

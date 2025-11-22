@@ -401,6 +401,14 @@ public enum Command: UInt, CaseIterable, Sendable {
 
     case cmPrev
 
+    case cmFind
+
+    case cmReplace
+
+    case cmSearchAgain
+
+    case cmClear
+
     case cmDosShell // For compatibility with original Tvision
 
     case cmUser // User-defined command base
