@@ -10,6 +10,7 @@ open class EditorView: MemoView {
         }
     }
     private var selectionAnchor: Point?
+    private var desiredColumn: Int?
 
     public override init(frame: Rect, text: String = "", validator: Validator? = nil, historyManager: HistoryManager = HistoryManager()) {
         super.init(frame: frame, text: text, validator: validator, historyManager: historyManager)
@@ -22,30 +23,38 @@ open class EditorView: MemoView {
         guard let selection = selectedRange else { return }
         let globalOrigin = makeGlobal(point: .zero)
         let selectionColors = Application.currentColorTheme.currentPalette[.listSelected]
-        let start = min(selection.lowerBound, selection.upperBound)
-        let end = max(selection.lowerBound, selection.upperBound)
-        for y in start.y...end.y {
+        let norm = normalizedSelection(selection)
+        for y in norm.start.y...norm.end.y {
+            guard y >= 0 && y < lines.count else { continue }
             if y < scrollOffset.y || y >= scrollOffset.y + frame.size.height { continue }
             let line = lines[y]
-            let selStartX = (y == start.y) ? start.x : 0
-            let selEndX = (y == end.y) ? end.x : line.count
+            let selStartX = (y == norm.start.y) ? norm.start.x : 0
+            let selEndX = (y == norm.end.y) ? norm.end.x : line.count
             let visibleStart = max(selStartX, scrollOffset.x)
             let visibleEnd = min(selEndX, scrollOffset.x + frame.size.width)
             guard visibleStart < visibleEnd else { continue }
             let globalY = globalOrigin.y + (y - scrollOffset.y)
             for x in visibleStart..<visibleEnd {
                 let globalX = globalOrigin.x + (x - scrollOffset.x)
-                let ch: Character = {
+                if x < line.count {
                     let idx = line.index(line.startIndex, offsetBy: x)
-                    return line[idx]
-                }()
-                Application.shared.terminal.writeToBuffer(
-                    x: globalX,
-                    y: globalY,
-                    char: ch,
-                    foreground: selectionColors.foreground,
-                    background: selectionColors.background
-                )
+                    let ch = line[idx]
+                    Application.shared.terminal.writeToBuffer(
+                        x: globalX,
+                        y: globalY,
+                        char: ch,
+                        foreground: selectionColors.foreground,
+                        background: selectionColors.background
+                    )
+                } else {
+                    Application.shared.terminal.writeToBuffer(
+                        x: globalX,
+                        y: globalY,
+                        char: " ",
+                        foreground: selectionColors.foreground,
+                        background: selectionColors.background
+                    )
+                }
             }
         }
     }
@@ -118,18 +127,26 @@ open class EditorView: MemoView {
                 }
                 handled = true
             case KeyEvent.KeyCode.upArrow:
-                handleSelectionMovement(modifying: keyEvent.controlKeyState.contains(.shift))
+                let modifying = keyEvent.controlKeyState.contains(.shift)
+                handleSelectionMovement(modifying: modifying)
+                desiredColumn = desiredColumn ?? cursorPosition.x
                 if cursorPosition.y > 0 {
                     cursorPosition.y -= 1
-                    cursorPosition.x = min(cursorPosition.x, lines[cursorPosition.y].count)
+                    cursorPosition.x = min(desiredColumn ?? cursorPosition.x, lines[cursorPosition.y].count)
                 }
+                if !modifying { desiredColumn = nil }
+                updateSelection()
                 handled = true
             case KeyEvent.KeyCode.downArrow:
-                handleSelectionMovement(modifying: keyEvent.controlKeyState.contains(.shift))
+                let modifying = keyEvent.controlKeyState.contains(.shift)
+                handleSelectionMovement(modifying: modifying)
+                desiredColumn = desiredColumn ?? cursorPosition.x
                 if cursorPosition.y < lines.count - 1 {
                     cursorPosition.y += 1
-                    cursorPosition.x = min(cursorPosition.x, lines[cursorPosition.y].count)
+                    cursorPosition.x = min(desiredColumn ?? cursorPosition.x, lines[cursorPosition.y].count)
                 }
+                if !modifying { desiredColumn = nil }
+                updateSelection()
                 handled = true
             case KeyEvent.KeyCode.home:
                 clearSelectionIfNeeded()
@@ -312,15 +329,14 @@ open class EditorView: MemoView {
 
     private func selectedText() -> String? {
         guard let selection = selectedRange else { return nil }
-        let start = min(selection.lowerBound, selection.upperBound)
-        let end = max(selection.lowerBound, selection.upperBound)
-        guard start.y < lines.count else { return nil }
+        let norm = normalizedSelection(selection)
+        guard norm.start.y < lines.count else { return nil }
         var collected: [String] = []
-        for y in start.y...end.y {
+        for y in norm.start.y...norm.end.y {
             guard y < lines.count else { break }
             let line = lines[y]
-            let s = (y == start.y) ? start.x : 0
-            let e = (y == end.y) ? end.x : line.count
+            let s = (y == norm.start.y) ? norm.start.x : 0
+            let e = (y == norm.end.y) ? norm.end.x : line.count
             if s >= e { continue }
             let startIdx = line.index(line.startIndex, offsetBy: min(s, line.count))
             let endIdx = line.index(line.startIndex, offsetBy: min(e, line.count))
@@ -332,36 +348,45 @@ open class EditorView: MemoView {
     @discardableResult
     private func deleteSelectionIfAny() -> Bool {
         guard let selection = selectedRange else { return false }
-        let start = min(selection.lowerBound, selection.upperBound)
-        let end = max(selection.lowerBound, selection.upperBound)
-        guard start.y < lines.count else { return false }
+        let norm = normalizedSelection(selection)
+        guard norm.start.y < lines.count else { return false }
 
-        if start.y == end.y {
-            var line = lines[start.y]
-            let sIdx = line.index(line.startIndex, offsetBy: min(start.x, line.count))
-            let eIdx = line.index(line.startIndex, offsetBy: min(end.x, line.count))
+        if norm.start.y == norm.end.y {
+            var line = lines[norm.start.y]
+            let sIdx = line.index(line.startIndex, offsetBy: min(norm.start.x, line.count))
+            let eIdx = line.index(line.startIndex, offsetBy: min(norm.end.x, line.count))
             line.removeSubrange(sIdx..<eIdx)
-            lines[start.y] = line
+            lines[norm.start.y] = line
         } else {
             // remove tail of start line
-            var firstLine = lines[start.y]
-            let firstCut = firstLine.index(firstLine.startIndex, offsetBy: min(start.x, firstLine.count))
+            var firstLine = lines[norm.start.y]
+            let firstCut = firstLine.index(firstLine.startIndex, offsetBy: min(norm.start.x, firstLine.count))
             firstLine.removeSubrange(firstCut..<firstLine.endIndex)
             // remove head of end line
-            var lastLine = lines[end.y]
-            let lastCut = lastLine.index(lastLine.startIndex, offsetBy: min(end.x, lastLine.count))
+            var lastLine = lines[norm.end.y]
+            let lastCut = lastLine.index(lastLine.startIndex, offsetBy: min(norm.end.x, lastLine.count))
             lastLine.removeSubrange(lastLine.startIndex..<lastCut)
 
             // splice
-            lines[start.y] = firstLine + lastLine
+            lines[norm.start.y] = firstLine + lastLine
             // remove intermediate lines
-            if end.y > start.y {
-                lines.removeSubrange((start.y + 1)...end.y)
+            if norm.end.y > norm.start.y {
+                lines.removeSubrange((norm.start.y + 1)...norm.end.y)
             }
         }
         text = lines.joined(separator: "\n")
-        cursorPosition = start
+        cursorPosition = norm.start
         clearSelectionIfNeeded()
         return true
+    }
+
+    private func normalizedSelection(_ selection: Range<Point>) -> (start: Point, end: Point) {
+        let s = min(selection.lowerBound, selection.upperBound)
+        let e = max(selection.lowerBound, selection.upperBound)
+        let startLine = max(0, min(s.y, lines.count - 1))
+        let endLine = max(0, min(e.y, lines.count - 1))
+        let startX = min(max(0, s.x), lines[startLine].count)
+        let endX = min(max(0, e.x), lines[endLine].count)
+        return (Point(x: startX, y: startLine), Point(x: endX, y: endLine))
     }
 }
