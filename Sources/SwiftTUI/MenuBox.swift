@@ -58,6 +58,14 @@ open class MenuBox: BaseView {
             let displayY = frame.origin.y + 1 + index // +1 for top border
             let displayX = frame.origin.x + 1 // Indent a bit
 
+            if item.isSeparator {
+                let sepChar: Character = "─"
+                for x in 1..<(width - 1) {
+                    Application.shared.terminal.writeToBuffer(x: frame.origin.x + x, y: displayY, char: sepChar, foreground: normalColors.foreground, background: normalColors.background)
+                }
+                continue
+            }
+
             var itemText = item.title
             if let hint = item.hotkeyHint {
                 itemText += "\t\(hint)"

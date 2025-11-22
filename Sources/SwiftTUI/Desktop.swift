@@ -73,8 +73,35 @@ open class Desktop: BaseView {
             lastFocusedWindow = window
             menuBar?.setState(.sfFocused, enable: false)
 
+            setNeedsDisplay()
+        }
+    }
+    
+    public func tileWindows() {
+        guard !windows.isEmpty else { return }
+        let cols = Int(Double(windows.count).squareRoot().rounded(.up))
+        let rows = Int(ceil(Double(windows.count) / Double(cols)))
+        let cellWidth = max(1, frame.size.width / cols)
+        let cellHeight = max(1, (frame.size.height - 1) / rows) // leave status line
+        for (idx, window) in windows.enumerated() {
+            let c = idx % cols
+            let r = idx / cols
+            window.frame = Rect(x: c * cellWidth, y: r * cellHeight, width: cellWidth, height: cellHeight)
+            window.setState(.sfVisible, enable: true)
+        }
         setNeedsDisplay()
     }
+
+    public func cascadeWindows() {
+        var offset = 0
+        for window in windows {
+            let w = max(40, frame.size.width - offset * 2)
+            let h = max(12, frame.size.height - offset * 2 - 1)
+            window.frame = Rect(x: offset, y: offset, width: w, height: h)
+            window.setState(.sfVisible, enable: true)
+            offset += 2
+        }
+        setNeedsDisplay()
     }
 
     override open func draw(in rect: Rect) {

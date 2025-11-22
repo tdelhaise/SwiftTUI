@@ -121,6 +121,12 @@ let status = StatusLine(frame: statusFrame, message: "Swifted - F2 Save, F3 Open
                 bringToFront(window: last)
             }
             return true
+        case .cmTile:
+            tileWindows()
+            return true
+        case .cmCascade:
+            cascadeWindows()
+            return true
         case .cmFind:
             if let editorWin = activeEditorWindow() {
                 let dialog = FindDialog { text in
