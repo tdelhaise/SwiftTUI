@@ -9,15 +9,45 @@ open class EditorView: MemoView {
             }
         }
     }
+    private var selectionAnchor: Point?
 
     public override init(frame: Rect, text: String = "", validator: Validator? = nil, historyManager: HistoryManager = HistoryManager()) {
         super.init(frame: frame, text: text, validator: validator, historyManager: historyManager)
     }
 
     override open func draw(in rect: Rect) {
-        super.draw(in: rect) // Draw MemoView content
+        super.draw(in: rect) // Draw MemoView content (background/text)
 
-        // Selection drawing can be added here if selectionRange is set.
+        // Draw selection overlay if present.
+        guard let selection = selectedRange else { return }
+        let globalOrigin = makeGlobal(point: .zero)
+        let selectionColors = Application.currentColorTheme.currentPalette[.listSelected]
+        let start = min(selection.lowerBound, selection.upperBound)
+        let end = max(selection.lowerBound, selection.upperBound)
+        for y in start.y...end.y {
+            if y < scrollOffset.y || y >= scrollOffset.y + frame.size.height { continue }
+            let line = lines[y]
+            let selStartX = (y == start.y) ? start.x : 0
+            let selEndX = (y == end.y) ? end.x : line.count
+            let visibleStart = max(selStartX, scrollOffset.x)
+            let visibleEnd = min(selEndX, scrollOffset.x + frame.size.width)
+            guard visibleStart < visibleEnd else { continue }
+            let globalY = globalOrigin.y + (y - scrollOffset.y)
+            for x in visibleStart..<visibleEnd {
+                let globalX = globalOrigin.x + (x - scrollOffset.x)
+                let ch: Character = {
+                    let idx = line.index(line.startIndex, offsetBy: x)
+                    return line[idx]
+                }()
+                Application.shared.terminal.writeToBuffer(
+                    x: globalX,
+                    y: globalY,
+                    char: ch,
+                    foreground: selectionColors.foreground,
+                    background: selectionColors.background
+                )
+            }
+        }
     }
 
     override open func handle(keyEvent: KeyEvent) -> Bool {
@@ -41,13 +71,13 @@ open class EditorView: MemoView {
                     handled = true
                 }
             } else if keyEvent.character == "c" { // Ctrl+C for Copy
-                copyCurrentLine()
+                copySelectionOrLine()
                 handled = true
             } else if keyEvent.character == "v" { // Ctrl+V for Paste
                 pasteClipboard()
                 handled = true
             } else if keyEvent.character == "x" { // Ctrl+X for Cut
-                cutCurrentLine()
+                cutSelectionOrLine()
                 handled = true
             }
         }
@@ -55,6 +85,7 @@ open class EditorView: MemoView {
         if !handled {
             switch keyEvent.keyCode {
             case KeyEvent.KeyCode.leftArrow:
+                handleSelectionMovement(modifying: keyEvent.controlKeyState.contains(.shift))
                 if keyEvent.controlKeyState.contains(.control) {
                     // Ctrl+Left: Jump word left
                     // TODO: Implement word jump
@@ -69,6 +100,7 @@ open class EditorView: MemoView {
                 }
                 handled = true
             case KeyEvent.KeyCode.rightArrow:
+                handleSelectionMovement(modifying: keyEvent.controlKeyState.contains(.shift))
                 if keyEvent.controlKeyState.contains(.control) {
                     // Ctrl+Right: Jump word right
                     // TODO: Implement word jump
@@ -86,26 +118,34 @@ open class EditorView: MemoView {
                 }
                 handled = true
             case KeyEvent.KeyCode.upArrow:
+                handleSelectionMovement(modifying: keyEvent.controlKeyState.contains(.shift))
                 if cursorPosition.y > 0 {
                     cursorPosition.y -= 1
                     cursorPosition.x = min(cursorPosition.x, lines[cursorPosition.y].count)
                 }
                 handled = true
             case KeyEvent.KeyCode.downArrow:
+                handleSelectionMovement(modifying: keyEvent.controlKeyState.contains(.shift))
                 if cursorPosition.y < lines.count - 1 {
                     cursorPosition.y += 1
                     cursorPosition.x = min(cursorPosition.x, lines[cursorPosition.y].count)
                 }
                 handled = true
             case KeyEvent.KeyCode.home:
+                clearSelectionIfNeeded()
                 cursorPosition.x = 0
                 handled = true
             case KeyEvent.KeyCode.end:
+                clearSelectionIfNeeded()
                 if cursorPosition.y < lines.count {
                     cursorPosition.x = lines[cursorPosition.y].count
                 }
                 handled = true
             case KeyEvent.KeyCode.backspace:
+                if deleteSelectionIfAny() {
+                    handled = true
+                    break
+                }
                 if cursorPosition.x > 0 {
                     let lineIndex = cursorPosition.y
                     var currentLine = lines[lineIndex]
@@ -124,6 +164,10 @@ open class EditorView: MemoView {
                     handled = true
                 }
             case KeyEvent.KeyCode.delete:
+                if deleteSelectionIfAny() {
+                    handled = true
+                    break
+                }
                 if cursorPosition.y < lines.count {
                     let lineIndex = cursorPosition.y
                     var currentLine = lines[lineIndex]
@@ -141,6 +185,7 @@ open class EditorView: MemoView {
                     }
                 }
             case KeyEvent.KeyCode.enter:
+                clearSelectionIfNeeded()
                 let lineIndex = cursorPosition.y
                 var currentLine = lines[lineIndex]
                 let remainingLine = String(currentLine.suffix(from: currentLine.index(currentLine.startIndex, offsetBy: cursorPosition.x)))
@@ -153,6 +198,7 @@ open class EditorView: MemoView {
                 handled = true
             default:
                 if let str = keyEvent.character, let char = str.first, let ascii = char.asciiValue, ascii >= 32 && ascii <= 126 {
+                    deleteSelectionIfAny()
                     let lineIndex = cursorPosition.y
                     var currentLine = lines[lineIndex]
                     currentLine.insert(contentsOf: str, at: currentLine.index(currentLine.startIndex, offsetBy: cursorPosition.x))
@@ -210,6 +256,23 @@ open class EditorView: MemoView {
         Application.shared.setClipboardText(lines[cursorPosition.y])
     }
 
+    private func copySelectionOrLine() {
+        if let text = selectedText() {
+            Application.shared.setClipboardText(text)
+        } else {
+            copyCurrentLine()
+        }
+    }
+
+    private func cutSelectionOrLine() {
+        if let _ = selectedText() {
+            copySelectionOrLine()
+            _ = deleteSelectionIfAny()
+        } else {
+            cutCurrentLine()
+        }
+    }
+
     private func cutCurrentLine() {
         guard cursorPosition.y < lines.count else { return }
         Application.shared.setClipboardText(lines[cursorPosition.y])
@@ -224,5 +287,81 @@ open class EditorView: MemoView {
         if let clip = Application.shared.clipboardText() {
             insertText(clip)
         }
+    }
+
+    // MARK: - Selection helpers
+    private func handleSelectionMovement(modifying: Bool) {
+        if modifying {
+            if selectionAnchor == nil { selectionAnchor = cursorPosition }
+        } else {
+            selectionAnchor = nil
+            selectedRange = nil
+        }
+    }
+
+    private func updateSelection() {
+        if let anchor = selectionAnchor {
+            selectedRange = anchor..<cursorPosition
+        }
+    }
+
+    private func clearSelectionIfNeeded() {
+        selectionAnchor = nil
+        selectedRange = nil
+    }
+
+    private func selectedText() -> String? {
+        guard let selection = selectedRange else { return nil }
+        let start = min(selection.lowerBound, selection.upperBound)
+        let end = max(selection.lowerBound, selection.upperBound)
+        guard start.y < lines.count else { return nil }
+        var collected: [String] = []
+        for y in start.y...end.y {
+            guard y < lines.count else { break }
+            let line = lines[y]
+            let s = (y == start.y) ? start.x : 0
+            let e = (y == end.y) ? end.x : line.count
+            if s >= e { continue }
+            let startIdx = line.index(line.startIndex, offsetBy: min(s, line.count))
+            let endIdx = line.index(line.startIndex, offsetBy: min(e, line.count))
+            collected.append(String(line[startIdx..<endIdx]))
+        }
+        return collected.joined(separator: "\n")
+    }
+
+    @discardableResult
+    private func deleteSelectionIfAny() -> Bool {
+        guard let selection = selectedRange else { return false }
+        let start = min(selection.lowerBound, selection.upperBound)
+        let end = max(selection.lowerBound, selection.upperBound)
+        guard start.y < lines.count else { return false }
+
+        if start.y == end.y {
+            var line = lines[start.y]
+            let sIdx = line.index(line.startIndex, offsetBy: min(start.x, line.count))
+            let eIdx = line.index(line.startIndex, offsetBy: min(end.x, line.count))
+            line.removeSubrange(sIdx..<eIdx)
+            lines[start.y] = line
+        } else {
+            // remove tail of start line
+            var firstLine = lines[start.y]
+            let firstCut = firstLine.index(firstLine.startIndex, offsetBy: min(start.x, firstLine.count))
+            firstLine.removeSubrange(firstCut..<firstLine.endIndex)
+            // remove head of end line
+            var lastLine = lines[end.y]
+            let lastCut = lastLine.index(lastLine.startIndex, offsetBy: min(end.x, lastLine.count))
+            lastLine.removeSubrange(lastLine.startIndex..<lastCut)
+
+            // splice
+            lines[start.y] = firstLine + lastLine
+            // remove intermediate lines
+            if end.y > start.y {
+                lines.removeSubrange((start.y + 1)...end.y)
+            }
+        }
+        text = lines.joined(separator: "\n")
+        cursorPosition = start
+        clearSelectionIfNeeded()
+        return true
     }
 }
