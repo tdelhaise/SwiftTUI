@@ -14,6 +14,11 @@ open class MenuBox: BaseView {
     public var onMenuClosed: (() -> Void)?
     public var parentMenuOrigin: Point = .zero
     public var onOpenSubmenu: ((MenuBox, Int, MenuItem) -> Void)?
+    public static func preferredWidth(for item: MenuItem) -> Int {
+        let base = TextFormatter.displayWidth(of: item.title)
+        let hintWidth = item.hotkeyHint.map { TextFormatter.displayWidth(of: $0) + 2 } ?? 0
+        return base + hintWidth + 4
+    }
 
     public init(frame: Rect, menuItems: [MenuItem]) {
         self.menuItems = menuItems
@@ -68,22 +73,35 @@ open class MenuBox: BaseView {
                 continue
             }
 
-            var itemText = item.title
-            if let hint = item.hotkeyHint {
-                itemText += "\t\(hint)"
-            }
-
             let colors = (index == selectedItemIndex) ? selectedColors : normalColors
             let currentFg = colors.foreground
             let currentBg = colors.background
 
-            let lineToDisplay = String(itemText.prefix(width - 2)) // Account for borders
-            for (charIndex, char) in lineToDisplay.enumerated() {
-                Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY, char: char, foreground: currentFg, background: currentBg)
+            // Title
+            let titleWidth = min(TextFormatter.displayWidth(of: item.title), width - 4)
+            let titleStr = TextFormatter.fit(item.title, width: titleWidth, alignment: .left)
+            for (idx, ch) in titleStr.enumerated() {
+                Application.shared.terminal.writeToBuffer(x: displayX + idx, y: displayY, char: ch, foreground: currentFg, background: currentBg)
             }
-            // Fill remaining space with background color
-            for charIndex in lineToDisplay.count..<(width - 2) {
-                Application.shared.terminal.writeToBuffer(x: displayX + charIndex, y: displayY, char: " ", foreground: currentFg, background: currentBg)
+            var cursor = displayX + titleWidth
+            while cursor < displayX + width - 4 {
+                Application.shared.terminal.writeToBuffer(x: cursor, y: displayY, char: " ", foreground: currentFg, background: currentBg)
+                cursor += 1
+            }
+            // Hint right aligned
+            if let hint = item.hotkeyHint {
+                let hintWidth = min(TextFormatter.displayWidth(of: hint), width - 4)
+                let hintStr = TextFormatter.fit(hint, width: hintWidth, alignment: .right)
+                for (idx, ch) in hintStr.enumerated() {
+                    let pos = displayX + (width - 4 - hintWidth) + idx
+                    if pos < displayX + width - 1 {
+                        Application.shared.terminal.writeToBuffer(x: pos, y: displayY, char: ch, foreground: currentFg, background: currentBg)
+                    }
+                }
+            }
+            // Fill trailing space
+            for pos in cursor..<(displayX + width - 1) {
+                Application.shared.terminal.writeToBuffer(x: pos, y: displayY, char: " ", foreground: currentFg, background: currentBg)
             }
         }
     }

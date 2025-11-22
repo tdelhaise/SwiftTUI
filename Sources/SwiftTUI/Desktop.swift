@@ -226,7 +226,7 @@ open class Desktop: BaseView {
         guard let menuBar = menuBar else { return }
         guard index >= 0 && index < menuBar.menuItems.count else { return }
         let items = menuBar.menuItems[index].subitems ?? []
-        let width = items.map { $0.title.count + 4 }.max() ?? 10
+        let width = items.map { MenuBox.preferredWidth(for: $0) }.max() ?? 10
         let height = items.count + 2
         let origin = Point(x: 0, y: 1)
         let frame = Rect(x: origin.x, y: origin.y, width: width, height: height)
@@ -242,7 +242,7 @@ open class Desktop: BaseView {
         }
         box.onOpenSubmenu = { [weak self] parentBox, idx, item in
             guard let subitems = item.subitems, let self else { return }
-            let subWidth = subitems.map { $0.title.count + 4 }.max() ?? 10
+            let subWidth = subitems.map { MenuBox.preferredWidth(for: $0) }.max() ?? 10
             let subHeight = subitems.count + 2
             let parentY = parentBox.frame.origin.y + 1 + idx
             let originX = parentBox.frame.origin.x + parentBox.frame.size.width
