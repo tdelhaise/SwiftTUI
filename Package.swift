@@ -12,8 +12,8 @@ let package = Package(
             targets: ["SwiftTUI"]
         ),
         .executable(
-            name: "Examples",
-            targets: ["Examples"]
+            name: "swifted",
+            targets: ["swifted"]
         )
     ],
     dependencies: [ // <--- then dependencies argument
@@ -32,7 +32,7 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "Examples",
+            name: "swifted",
             dependencies: ["SwiftTUI"],
             path: "Sources/Examples"
         ),
