@@ -13,6 +13,7 @@ open class MenuBox: BaseView {
     public var onItemSelected: ((MenuItem) -> Void)?
     public var onMenuClosed: (() -> Void)?
     public var parentMenuOrigin: Point = .zero
+    public var onOpenSubmenu: ((MenuBox, Int, MenuItem) -> Void)?
 
     public init(frame: Rect, menuItems: [MenuItem]) {
         self.menuItems = menuItems
@@ -135,6 +136,17 @@ open class MenuBox: BaseView {
                 let item = menuItems[localY]
                 onItemSelected?(item)
                 onMenuClosed?()
+                return true
+            }
+        }
+        if mouseEvent.eventType == .mouseMove {
+            let localY = mouseEvent.position.y - frame.origin.y
+            if localY >= 0 && localY < menuItems.count {
+                selectedItemIndex = localY
+                let item = menuItems[localY]
+                if item.subitems != nil {
+                    onOpenSubmenu?(self, localY, item)
+                }
                 return true
             }
         }

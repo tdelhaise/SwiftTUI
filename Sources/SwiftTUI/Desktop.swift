@@ -32,6 +32,7 @@ open class Desktop: BaseView {
     }
 
     private var activeMenuBox: MenuBox?
+    private var submenuBox: MenuBox?
 
     public func set(statusLine: StatusLine) {
         self.statusLine = statusLine
@@ -109,6 +110,7 @@ open class Desktop: BaseView {
 
         menuBar?.draw(in: rect)
         activeMenuBox?.draw(in: rect)
+        submenuBox?.draw(in: rect)
 
         // Draw windows from back to front (lowest index to highest index)
         for window in windows {
@@ -179,6 +181,11 @@ open class Desktop: BaseView {
                 return true
             }
         }
+        if let sub = submenuBox, sub.state.contains(.sfVisible) {
+            if sub.handle(mouseEvent: mouseEvent) {
+                return true
+            }
+        }
 
         if mouseEvent.eventType == .mouseWheel {
             if let topWindow = windows.last, topWindow.state.contains(.sfVisible) {
@@ -224,6 +231,29 @@ open class Desktop: BaseView {
         box.onMenuClosed = { [weak self] in
             self?.closeMenuBox()
         }
+        box.onOpenSubmenu = { [weak self] parentBox, idx, item in
+            guard let subitems = item.subitems, let self else { return }
+            let subWidth = subitems.map { $0.title.count + 4 }.max() ?? 10
+            let subHeight = subitems.count + 2
+            let parentY = parentBox.frame.origin.y + 1 + idx
+            let originX = parentBox.frame.origin.x + parentBox.frame.size.width
+            let subFrame = Rect(x: originX, y: parentY, width: subWidth, height: subHeight)
+            let subBox = MenuBox(frame: subFrame, menuItems: subitems)
+            subBox.onItemSelected = { item in
+                if let command = item.command {
+                    Task { await Application.shared.post(event: .command(command)) }
+                }
+                self.closeMenuBox()
+            }
+            subBox.onMenuClosed = { [weak self] in
+                self?.submenuBox = nil
+                self?.closeMenuBox()
+            }
+            subBox.onOpenSubmenu = nil
+            self.submenuBox = subBox
+            subBox.setState(.sfVisible, enable: true)
+            subBox.setState(.sfFocused, enable: true)
+        }
         box.parentMenuOrigin = origin
         activeMenuBox = box
         box.setState(.sfVisible, enable: true)
@@ -232,6 +262,7 @@ open class Desktop: BaseView {
 
     public func closeMenuBox() {
         activeMenuBox = nil
+        submenuBox = nil
         menuBar?.setState(.sfFocused, enable: false)
         lastFocusedWindow?.setState(.sfFocused, enable: true)
     }
