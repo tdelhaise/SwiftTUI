@@ -10,11 +10,21 @@ open class MenuBar: BaseView {
             }
         }
     }
+    public var onOpenMenu: ((Int) -> Void)?
+    public var onCloseMenu: (() -> Void)?
 
     public init(frame: Rect, menuItems: [MenuItem]) {
         self.menuItems = menuItems
         super.init(frame: frame)
         self.options.insert(.ofSelectable) // MenuBar should be selectable to receive focus
+        self.onOpenMenu = { [weak self] index in
+            (Application.shared.rootView as? Desktop)?.presentMenuBox(at: index)
+            _ = self // silence unused self warning
+        }
+        self.onCloseMenu = { [weak self] in
+            (Application.shared.rootView as? Desktop)?.closeMenuBox()
+            self?.activeMenuIndex = nil
+        }
     }
 
     override open func draw(in rect: Rect) {
@@ -48,7 +58,7 @@ open class MenuBar: BaseView {
         if keyEvent.controlKeyState.contains(.alt), let char = keyEvent.character {
             if let index = menuItems.firstIndex(where: { $0.shortcut?.uppercased() == char.uppercased() }) {
                 activeMenuIndex = index
-                // In a real app, this would open the submenu
+                onOpenMenu?(index)
                 return true
             }
         }
@@ -57,6 +67,7 @@ open class MenuBar: BaseView {
         case KeyEvent.KeyCode.escape:
             if activeMenuIndex != nil {
                 activeMenuIndex = nil // Close active menu
+                onCloseMenu?()
                 return true
             } else {
                 // If no menu is active, let the desktop handle returning focus
@@ -65,11 +76,13 @@ open class MenuBar: BaseView {
         case KeyEvent.KeyCode.leftArrow:
             if let activeIndex = activeMenuIndex {
                 activeMenuIndex = max(0, activeIndex - 1)
+                onOpenMenu?(activeMenuIndex!)
                 return true
             }
         case KeyEvent.KeyCode.rightArrow:
             if let activeIndex = activeMenuIndex {
                 activeMenuIndex = min(menuItems.count - 1, activeIndex + 1)
+                onOpenMenu?(activeMenuIndex!)
                 return true
             }
         case KeyEvent.KeyCode.enter:
@@ -78,9 +91,10 @@ open class MenuBar: BaseView {
                 if let command = item.command {
                     Task { await Application.shared.post(event: .command(command)) }
                     activeMenuIndex = nil // Close menu after command
+                    onCloseMenu?()
                     return true
                 } else if item.subitems != nil {
-                    // In a real app, this would open the submenu
+                    onOpenMenu?(activeIndex)
                     return true
                 }
             }

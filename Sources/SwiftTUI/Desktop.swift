@@ -31,6 +31,8 @@ open class Desktop: BaseView {
         self.options.insert(.ofBuffered) // Desktop might benefit from buffering
     }
 
+    private var activeMenuBox: MenuBox?
+
     public func set(statusLine: StatusLine) {
         self.statusLine = statusLine
     }
@@ -71,14 +73,15 @@ open class Desktop: BaseView {
             lastFocusedWindow = window
             menuBar?.setState(.sfFocused, enable: false)
 
-            setNeedsDisplay()
-        }
+        setNeedsDisplay()
+    }
     }
 
     override open func draw(in rect: Rect) {
         super.draw(in: rect) // Draw desktop background (fills with empty cells)
 
         menuBar?.draw(in: rect)
+        activeMenuBox?.draw(in: rect)
 
         // Draw windows from back to front (lowest index to highest index)
         for window in windows {
@@ -144,6 +147,12 @@ open class Desktop: BaseView {
     }
 
     override open func handle(mouseEvent: MouseEvent) -> Bool {
+        if let menuBox = activeMenuBox, menuBox.state.contains(.sfVisible) {
+            if menuBox.handle(mouseEvent: mouseEvent) {
+                return true
+            }
+        }
+
         if mouseEvent.eventType == .mouseWheel {
             if let topWindow = windows.last, topWindow.state.contains(.sfVisible) {
                 return topWindow.handle(mouseEvent: mouseEvent)
@@ -167,5 +176,36 @@ open class Desktop: BaseView {
             }
         }
         return super.handle(mouseEvent: mouseEvent) // Pass to BaseView's handler
+    }
+
+    // MARK: - Menu handling
+    public func presentMenuBox(at index: Int) {
+        guard let menuBar = menuBar else { return }
+        guard index >= 0 && index < menuBar.menuItems.count else { return }
+        let items = menuBar.menuItems[index].subitems ?? []
+        let width = items.map { $0.title.count + 4 }.max() ?? 10
+        let height = items.count + 2
+        let origin = Point(x: 0, y: 1)
+        let frame = Rect(x: origin.x, y: origin.y, width: width, height: height)
+        let box = MenuBox(frame: frame, menuItems: items)
+        box.onItemSelected = { [weak self] item in
+            if let command = item.command {
+                Task { await Application.shared.post(event: .command(command)) }
+            }
+            self?.closeMenuBox()
+        }
+        box.onMenuClosed = { [weak self] in
+            self?.closeMenuBox()
+        }
+        box.parentMenuOrigin = origin
+        activeMenuBox = box
+        box.setState(.sfVisible, enable: true)
+        box.setState(.sfFocused, enable: true)
+    }
+
+    public func closeMenuBox() {
+        activeMenuBox = nil
+        menuBar?.setState(.sfFocused, enable: false)
+        lastFocusedWindow?.setState(.sfFocused, enable: true)
     }
 }

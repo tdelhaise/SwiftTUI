@@ -12,6 +12,7 @@ open class MenuBox: BaseView {
     }
     public var onItemSelected: ((MenuItem) -> Void)?
     public var onMenuClosed: (() -> Void)?
+    public var parentMenuOrigin: Point = .zero
 
     public init(frame: Rect, menuItems: [MenuItem]) {
         self.menuItems = menuItems
@@ -58,8 +59,8 @@ open class MenuBox: BaseView {
             let displayX = frame.origin.x + 1 // Indent a bit
 
             var itemText = item.title
-            if let shortcut = item.shortcut {
-                itemText += " (\(shortcut))"
+            if let hint = item.hotkeyHint {
+                itemText += "\t\(hint)"
             }
 
             let colors = (index == selectedItemIndex) ? selectedColors : normalColors
@@ -101,6 +102,9 @@ open class MenuBox: BaseView {
         case KeyEvent.KeyCode.escape:
             onMenuClosed?()
             return true
+        case KeyEvent.KeyCode.leftArrow:
+            onMenuClosed?()
+            return true
         default:
             break
         }
@@ -108,7 +112,13 @@ open class MenuBox: BaseView {
     }
 
     override open func handle(mouseEvent: MouseEvent) -> Bool {
-        guard frame.contains(mouseEvent.position) else { return false }
+        guard frame.contains(mouseEvent.position) else {
+            if mouseEvent.eventType == .mouseDown {
+                onMenuClosed?()
+                return true
+            }
+            return false
+        }
 
         if mouseEvent.eventType == .mouseDown {
             let localY = mouseEvent.position.y - frame.origin.y
