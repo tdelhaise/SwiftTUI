@@ -107,17 +107,17 @@ open class MenuBar: BaseView {
     override open func handle(mouseEvent: MouseEvent) -> Bool {
         guard frame.contains(mouseEvent.position) else { return false }
 
-        if mouseEvent.eventType == .mouseDown {
+        if mouseEvent.eventType == .mouseDown || mouseEvent.eventType == .mouseMove {
             var currentX = frame.origin.x + 1
             for (index, item) in menuItems.enumerated() {
                 let itemWidth = (" \(item.title) ").count
                 if mouseEvent.position.x >= currentX && mouseEvent.position.x < currentX + itemWidth {
-                    if activeMenuIndex == index {
-                        activeMenuIndex = nil // Click on active menu closes it
-                        print("  MenuBar: Mouse click closed menu '\(item.title)'")
+                    if activeMenuIndex == index && mouseEvent.eventType == .mouseDown {
+                        activeMenuIndex = nil
+                        onCloseMenu?()
                     } else {
-                        activeMenuIndex = index // Click on inactive menu opens it
-                        print("  MenuBar: Mouse click opened menu '\(item.title)'")
+                        activeMenuIndex = index
+                        onOpenMenu?(index)
                     }
                     return true
                 }

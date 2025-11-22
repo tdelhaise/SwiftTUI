@@ -20,6 +20,7 @@ open class MenuBox: BaseView {
         super.init(frame: frame)
         self.options.insert(.ofSelectable) // MenuBox should be selectable to receive focus
         self.state.insert(.sfModal) // MenuBox is typically modal
+        self.eventMask.insert(.mouse)
         if !menuItems.isEmpty {
             selectedItemIndex = 0 // Select first item by default
         }
