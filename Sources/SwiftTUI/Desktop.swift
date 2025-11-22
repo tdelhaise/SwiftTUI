@@ -82,25 +82,34 @@ open class Desktop: BaseView {
         guard !windows.isEmpty else { return }
         let cols = Int(Double(windows.count).squareRoot().rounded(.up))
         let rows = Int(ceil(Double(windows.count) / Double(cols)))
-        let cellWidth = max(1, frame.size.width / cols)
-        let cellHeight = max(1, (frame.size.height - 1) / rows) // leave status line
+        let topMargin = menuBar == nil ? 0 : 1
+        let bottomMargin = statusLine == nil ? 0 : 1
+        let availWidth = max(1, frame.size.width)
+        let availHeight = max(1, frame.size.height - topMargin - bottomMargin)
+        let cellWidth = max(20, availWidth / cols)
+        let cellHeight = max(8, availHeight / rows)
         for (idx, window) in windows.enumerated() {
             let c = idx % cols
             let r = idx / cols
-            window.frame = Rect(x: c * cellWidth, y: r * cellHeight, width: cellWidth, height: cellHeight)
+            window.frame = Rect(x: c * cellWidth, y: topMargin + r * cellHeight, width: cellWidth, height: cellHeight)
             window.setState(.sfVisible, enable: true)
         }
         setNeedsDisplay()
     }
 
     public func cascadeWindows() {
+        let topMargin = menuBar == nil ? 0 : 1
+        let bottomMargin = statusLine == nil ? 0 : 1
+        let availWidth = max(1, frame.size.width)
+        let availHeight = max(1, frame.size.height - topMargin - bottomMargin)
         var offset = 0
+        let step = 2
         for window in windows {
-            let w = max(40, frame.size.width - offset * 2)
-            let h = max(12, frame.size.height - offset * 2 - 1)
-            window.frame = Rect(x: offset, y: offset, width: w, height: h)
+            let w = max(40, availWidth - offset * step)
+            let h = max(12, availHeight - offset * step)
+            window.frame = Rect(x: offset * step, y: topMargin + offset * step, width: w, height: h)
             window.setState(.sfVisible, enable: true)
-            offset += 2
+            offset += 1
         }
         setNeedsDisplay()
     }
