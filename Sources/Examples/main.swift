@@ -3,6 +3,7 @@ import Foundation
 
 // Entry point for the Swifted (tvedit-like) example.
 let app = Application()
+Application.currentColorTheme = ColorTheme(palette: .defaultBlue)
 let desktopFrame = Rect(origin: .zero, size: app.terminal.windowSize)
 let desktop = SwiftedDesktop(frame: desktopFrame)
 desktop.installMenuBar()
@@ -50,7 +51,7 @@ final class SwiftedDesktop: Desktop {
     func installStatusLine() {
         let h = frame.size.height
         let statusFrame = Rect(x: 0, y: h - 1, width: frame.size.width, height: 1)
-        let status = StatusLine(frame: statusFrame, message: "Swifted - F2 Save, F3 Open, Ctrl-Q Quit")
+let status = StatusLine(frame: statusFrame, message: "Swifted - F2 Save, F3 Open, F10 Menu, Ctrl-Q Quit")
         set(statusLine: status)
     }
 
