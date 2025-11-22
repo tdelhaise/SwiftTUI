@@ -1,23 +1,171 @@
 import SwiftTUI
+import Foundation
 
 @main
-struct HelloWorld {
+struct Swifted {
     static func main() {
-        let application = Application()
-        let desktop = Desktop(frame: Rect(origin: .zero, size: application.terminal.windowSize))
-        
-        let fileMenu = MenuItem(title: "File", shortcut: "F", subitems: [
-            MenuItem(title: "Quit", command: .cmQuit)
-        ])
-        let menuBar = MenuBar(frame: Rect(x: 0, y: 0, width: application.terminal.windowSize.width, height: 1), menuItems: [fileMenu])
-        desktop.set(menuBar: menuBar)
+        let app = Application()
+        let desktopFrame = Rect(origin: .zero, size: app.terminal.windowSize)
+        let desktop = SwiftedDesktop(frame: desktopFrame)
+        desktop.installMenuBar()
+        desktop.installStatusLine()
+        app.setRootView(desktop)
+        app.run()
+    }
+}
 
-        let window = Window(frame: Rect(x: 10, y: 5, width: 40, height: 10), title: "Hello World", number: 0)
-        let label = Label(frame: Rect(x: 2, y: 2, width: 36, height: 1), text: "Hello, SwiftTUI!")
-        window.add(subview: label)
-        desktop.add(subview: window)
-        
-        application.setRootView(desktop)
-        application.run()
+// MARK: - Desktop controller
+@MainActor
+final class SwiftedDesktop: Desktop {
+    private var nextWindowId = 1
+
+    func installMenuBar() {
+        let w = frame.size.width
+        let menuFrame = Rect(x: 0, y: 0, width: w, height: 1)
+        let fileMenu = MenuItem(title: "File", shortcut: "F".first, subitems: [
+            MenuItem(title: "Open", command: .cmOpen, shortcut: "O".first),
+            MenuItem(title: "New", command: .cmNew, shortcut: "N".first),
+            MenuItem(title: "Save", command: .cmSave, shortcut: "S".first),
+            MenuItem(title: "Close", command: .cmClose, shortcut: "C".first),
+            MenuItem(title: "Quit", command: .cmQuit, shortcut: "Q".first)
+        ])
+        let editMenu = MenuItem(title: "Edit", shortcut: "E".first, subitems: [
+            MenuItem(title: "Undo", command: .cmUndo, shortcut: "U".first),
+            MenuItem(title: "Cut", command: .cmCut, shortcut: "T".first),
+            MenuItem(title: "Copy", command: .cmCopy, shortcut: "C".first),
+            MenuItem(title: "Paste", command: .cmPaste, shortcut: "P".first)
+        ])
+        let windowMenu = MenuItem(title: "Window", shortcut: "W".first, subitems: [
+            MenuItem(title: "Zoom", command: .cmZoom, shortcut: "Z".first),
+            MenuItem(title: "Next", command: .cmNext, shortcut: "N".first),
+            MenuItem(title: "Previous", command: .cmPrev, shortcut: "P".first),
+            MenuItem(title: "Tile", command: .cmTile, shortcut: "T".first),
+            MenuItem(title: "Cascade", command: .cmCascade, shortcut: "C".first)
+        ])
+        let menuBar = MenuBar(frame: menuFrame, menuItems: [fileMenu, editMenu, windowMenu])
+        set(menuBar: menuBar)
+    }
+
+    func installStatusLine() {
+        let h = frame.size.height
+        let statusFrame = Rect(x: 0, y: h - 1, width: frame.size.width, height: 1)
+        let status = StatusLine(frame: statusFrame, message: "Swifted - F2 Save, F3 Open, Ctrl-Q Quit")
+        set(statusLine: status)
+    }
+
+    private func activeEditorWindow() -> EditorWindow? {
+        return windows.last(where: { $0 is EditorWindow }) as? EditorWindow
+    }
+
+    private func openNewWindow(path: String?, visible: Bool = true, content: String = "") {
+        let winFrame = Rect(x: 2 + windows.count, y: 2 + windows.count, width: max(50, frame.size.width - 4), height: max(15, frame.size.height - 4))
+        let number = nextWindowId
+        nextWindowId += 1
+        let window = EditorWindow(frame: winFrame, number: number, filePath: path, initialText: content)
+        add(window: window)
+        if !visible { window.state.remove(.sfVisible) }
+    }
+
+    private func promptOpenFile() {
+        let dialogSize = Size(width: min(60, frame.size.width - 4), height: min(16, frame.size.height - 4))
+        let dialogOrigin = Point(x: (frame.size.width - dialogSize.width) / 2, y: (frame.size.height - dialogSize.height) / 2)
+        let dialogFrame = Rect(origin: dialogOrigin, size: dialogSize)
+        let fileDialog = FileDialog(frame: dialogFrame, title: "Open file")
+        fileDialog.onFileSelected = { [weak self] path in
+            guard let self else { return }
+            let text = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
+            self.openNewWindow(path: path, content: text)
+        }
+        add(subview: fileDialog)
+    }
+
+    private func saveActiveWindow(asNew: Bool = false) {
+        guard let editorWin = activeEditorWindow() else { return }
+        if let path = editorWin.filePath, !asNew {
+            editorWin.save(to: path)
+        } else {
+            let dialogSize = Size(width: min(60, frame.size.width - 4), height: min(16, frame.size.height - 4))
+            let dialogOrigin = Point(x: (frame.size.width - dialogSize.width) / 2, y: (frame.size.height - dialogSize.height) / 2)
+            let dialogFrame = Rect(origin: dialogOrigin, size: dialogSize)
+            let fileDialog = FileDialog(frame: dialogFrame, title: "Save file as")
+            fileDialog.onFileSelected = { [weak editorWin] path in
+                editorWin?.save(to: path)
+            }
+            add(subview: fileDialog)
+        }
+    }
+
+    override func handle(command: Command) -> Bool {
+        switch command {
+        case .cmOpen:
+            promptOpenFile()
+            return true
+        case .cmNew:
+            openNewWindow(path: nil, content: "")
+            return true
+        case .cmSave:
+            saveActiveWindow()
+            return true
+        case .cmClose:
+            activeEditorWindow()?.close()
+            return true
+        case .cmNext:
+            if let first = windows.first {
+                bringToFront(window: first)
+            }
+            return true
+        case .cmPrev:
+            if let last = windows.last {
+                bringToFront(window: last)
+            }
+            return true
+        default:
+            return super.handle(command: command)
+        }
+    }
+}
+
+// MARK: - Editor window
+@MainActor
+final class EditorWindow: Window {
+    let editor: EditorView
+    var filePath: String?
+    private var isDirty: Bool = false {
+        didSet { updateTitle() }
+    }
+
+    init(frame: Rect, number: Int, filePath: String?, initialText: String) {
+        self.filePath = filePath
+        self.editor = EditorView(frame: Rect(x: 1, y: 1, width: frame.size.width - 2, height: frame.size.height - 2), text: initialText)
+        super.init(frame: frame, title: filePath ?? "Untitled", number: number)
+        flags.insert(.wfClose)
+        add(subview: editor)
+    }
+
+    private func updateTitle() {
+        let name = filePath.map { ($0 as NSString).lastPathComponent } ?? "Untitled"
+        self.title = isDirty ? "\(name)*" : name
+    }
+
+    func save(to path: String) {
+        do {
+            try editor.text.write(toFile: path, atomically: true, encoding: .utf8)
+            filePath = path
+            isDirty = false
+            updateTitle()
+        } catch {
+            if let desktop = Application.shared.rootView as? Desktop {
+                let dialog = MessageBox.show(title: "Save error", message: "\(error)")
+                desktop.add(subview: dialog)
+            }
+        }
+    }
+
+    override func handle(keyEvent: KeyEvent) -> Bool {
+        if editor.handle(keyEvent: keyEvent) {
+            isDirty = true
+            return true
+        }
+        return super.handle(keyEvent: keyEvent)
     }
 }
